@@ -67,14 +67,12 @@ func init() {
 		log.Fatal(err)
 	}
 
-	rootCmd.AddCommand(propsCmd)
 	propsCmd.Flags().StringP("key", "k", "", "Key of server properties item to operate on")
 
 	if err := propsCmd.MarkFlagRequired("key"); err != nil {
 		log.Fatal(err)
 	}
 
-	rootCmd.AddCommand(propsCmd)
 	propsCmd.Flags().StringP("value", "v", "", "Value to set")
 
 	if err := propsCmd.MarkFlagRequired("value"); err != nil {
