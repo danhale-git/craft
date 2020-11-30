@@ -16,8 +16,11 @@ limitations under the License.
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"log"
+	"os"
+	"path/filepath"
 
 	"github.com/danhale-git/craft/internal/biomes"
 
@@ -28,7 +31,6 @@ import (
 var biomesCmd = &cobra.Command{
 	Use: "biomes",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		fmt.Println("biomes called")
 
 		// Get flag values
 		filePath, err := cmd.Flags().GetString("file-path")
@@ -46,25 +48,90 @@ var biomesCmd = &cobra.Command{
 			return err
 		}
 
-		// Update biome file or return an error
-		return biomes.UpdateFile(filePath, key, value)
+		fi, err := os.Stat(filePath)
+		if err != nil {
+			return err
+		}
+
+		switch mode := fi.Mode(); {
+		case mode.IsDir():
+			var files []string
+
+			err := filepath.Walk(filePath, func(path string, info os.FileInfo, err error) error {
+				if info.Mode().IsRegular() {
+					files = append(files, path)
+				}
+				return nil
+			})
+
+			if err != nil {
+				return err
+			}
+
+			fmt.Printf("change %d files?\nCtrl-C to abort", len(files))
+			bufio.NewReader(os.Stdin).ReadString('\n')
+
+			for _, file := range files {
+				err = OperateOnFile(file, key, value, args)
+				if err != nil {
+
+					return err
+				}
+			}
+
+		case mode.IsRegular():
+			// Update biome file or return an error
+			return OperateOnFile(filePath, key, value, args)
+		}
+
+		return nil
+
 	},
+}
+
+func OperateOnFile(filePath, key string, value interface{}, args []string) error {
+	switch args[0] {
+	case "setvalue":
+		err := biomes.UpdateValue(filePath, key, value)
+
+		if err != nil {
+			switch err.(type) {
+			case biomes.KeyNotFoundError:
+				fmt.Println(err)
+			default:
+				return err
+			}
+		}
+
+		return nil
+	case "replaceallblocks":
+		err := biomes.UpdateAllSurfaceMaterials(filePath, value.(string))
+
+		if err != nil {
+			switch err.(type) {
+			case biomes.KeyNotFoundError:
+				fmt.Println(err)
+			default:
+				return err
+			}
+		}
+
+		return nil
+	default:
+		return fmt.Errorf("unrecognised argument: '%s'", args[0])
+	}
 }
 
 func init() {
 	rootCmd.AddCommand(biomesCmd)
 
-	biomesCmd.Flags().StringP("file-path", "f", "", "Path to the server.properties file")
+	biomesCmd.Flags().StringP("file-path", "f", "", "Path to the directory containing biomes.")
 
 	if err := biomesCmd.MarkFlagRequired("file-path"); err != nil {
 		log.Fatal(err)
 	}
 
 	biomesCmd.Flags().StringP("key", "k", "", "Key of server properties item to operate on")
-
-	if err := biomesCmd.MarkFlagRequired("key"); err != nil {
-		log.Fatal(err)
-	}
 
 	biomesCmd.Flags().StringP("value", "v", "", "Value to set")
 
