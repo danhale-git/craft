@@ -3,8 +3,12 @@ package server
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
+	"os"
 	"strconv"
+
+	"golang.org/x/crypto/ssh/terminal"
 
 	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -47,6 +51,8 @@ func Run(hostPort int, name string) error {
 
 	portBinding := nat.PortMap{containerPort: []nat.PortBinding{hostBinding}}
 
+	//shell := strslice.StrSlice{}
+
 	// Request creation of container
 	createResp, err := c.ContainerCreate(
 		ctx,
@@ -56,6 +62,12 @@ func Run(hostPort int, name string) error {
 			ExposedPorts: nat.PortSet{
 				containerPort: struct{}{},
 			},
+			//Shell: shell,
+			AttachStdin:  true,
+			AttachStdout: true,
+			AttachStderr: true,
+			Tty:          true,
+			OpenStdin:    true,
 		},
 		&container.HostConfig{
 			PortBindings: portBinding,
@@ -67,10 +79,38 @@ func Run(hostPort int, name string) error {
 		return err
 	}
 
+	waiter, err := c.ContainerAttach(ctx, createResp.ID, docker.ContainerAttachOptions{
+		Stderr: true,
+		Stdout: true,
+		Stdin:  true,
+		Stream: true,
+	})
+
+	if err != nil {
+		return err
+	}
+
+	go io.Copy(os.Stdout, waiter.Reader)
+	//go io.Copy(os.Stderr, waiter.Reader) // this causes an index out of range exception in bufio.go, presumably because the reader is being read from twice. It should probably be copied.
+	go io.Copy(waiter.Conn, os.Stdin)
+
 	// Start the container
 	err = c.ContainerStart(ctx, createResp.ID, docker.ContainerStartOptions{})
 	if err != nil {
 		return err
+	}
+
+	// Save terminal state
+	fd := int(os.Stdin.Fd())
+
+	var oldState *terminal.State
+
+	if terminal.IsTerminal(fd) {
+		oldState, err = terminal.MakeRaw(fd)
+		if err != nil {
+			return err
+		}
+		defer terminal.Restore(fd, oldState)
 	}
 
 	// Wait for the container to stop running
@@ -82,6 +122,9 @@ func Run(hostPort int, name string) error {
 		}
 	case <-statusCh:
 	}
+
+	// Restore terminal state
+	terminal.Restore(fd, oldState)
 
 	// Panics if AutoRemove=true
 	/*// Print container logs
