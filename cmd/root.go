@@ -17,16 +17,12 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
 
-	"github.com/mitchellh/go-homedir"
 	"github.com/spf13/cobra"
-
-	"github.com/spf13/viper"
 )
 
-var cfgFile string
+//var cfgFile string
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -49,7 +45,7 @@ func init() {
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
 	// Find home directory.
-	home, err := homedir.Dir()
+	/*home, err := homedir.Dir()
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -64,5 +60,5 @@ func initConfig() {
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err != nil {
 		log.Println("No config file ('.craft') found in", home)
-	}
+	}*/
 }

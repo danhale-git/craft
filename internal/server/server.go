@@ -1,20 +1,20 @@
 package server
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"io"
 	"log"
 	"os"
 	"strconv"
+	"strings"
 
 	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 )
-
-var c *client.Client
 
 const (
 	defaultPort = 19132
@@ -23,39 +23,11 @@ const (
 	anyIP       = "0.0.0.0"
 )
 
-type Server struct {
-	cli *docker.HijackedResponse
-
-	// Terminal io to docker container bedrock_server process
-	// Container things
-}
-
-func (s *Server) Read(p []byte) (n int, err error) {
-	n, err = s.cli.Reader.Read(p)
-
-	if n > 2 {
-		log.Printf("Read %d bytes", n)
-	}
-
-	return
-}
-
-func (s *Server) Write(p []byte) (n int, err error) {
-	n, err = s.cli.Conn.Write(p)
-
-	if len(p) > 1 {
-		fmt.Printf("Wrote %d bytes: '%s'\n", n, p)
-	}
-
-	return
-}
-
-// docker run -d -e EULA=TRUE -p <HOST_PORT>:19132/udp danhaledocker/craftmine:<VERSION>
+// Run is the equivalent of the following docker command
+//
+//    docker run -d -e EULA=TRUE -p <HOST_PORT>:19132/udp danhaledocker/craftmine:<VERSION>
 func Run(hostPort int, name string) error {
-	if c == nil {
-		newClient()
-	}
-
+	c := newClient()
 	ctx := context.Background()
 
 	// Create port binding between host ip:port and container port
@@ -71,8 +43,6 @@ func Run(hostPort int, name string) error {
 
 	portBinding := nat.PortMap{containerPort: []nat.PortBinding{hostBinding}}
 
-	//shell := strslice.StrSlice{}
-
 	// Request creation of container
 	createResp, err := c.ContainerCreate(
 		ctx,
@@ -82,7 +52,6 @@ func Run(hostPort int, name string) error {
 			ExposedPorts: nat.PortSet{
 				containerPort: struct{}{},
 			},
-			//Shell: shell,
 			AttachStdin:  true,
 			AttachStdout: true,
 			AttachStderr: true,
@@ -99,27 +68,18 @@ func Run(hostPort int, name string) error {
 		return err
 	}
 
+	// Stream server output to stdout
 	waiter, err := c.ContainerAttach(ctx, createResp.ID, docker.ContainerAttachOptions{
 		Stderr: true,
 		Stdout: true,
-		Stdin:  true,
 		Stream: true,
 	})
-
-	server := Server{cli: &waiter}
-
 	if err != nil {
 		return err
 	}
 
 	go func() {
-		if _, err = io.Copy(os.Stdout, &server); err != nil {
-			panic(err)
-		}
-	}()
-
-	go func() {
-		if _, err = io.Copy(&server, os.Stdin); err != nil {
+		if _, err = io.Copy(os.Stdout, waiter.Reader); err != nil {
 			panic(err)
 		}
 	}()
@@ -143,20 +103,75 @@ func Run(hostPort int, name string) error {
 	return nil
 }
 
-func newClient() {
-	var err error
-	if c, err = client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation()); err != nil {
-		log.Fatalf("Error: Failed to create new docker client: %s", err)
+func Command(serverID string, args []string) ([]byte, error) {
+	waiter, err := newClient().ContainerAttach(
+		context.Background(),
+		serverID,
+		docker.ContainerAttachOptions{
+			Stderr: true,
+			Stdout: true,
+			Stdin:  true,
+			Stream: true,
+		},
+	)
+
+	if err != nil {
+		return nil, err
 	}
+
+	// Write the command to the server cli
+	_, err = waiter.Conn.Write([]byte(
+		strings.Join(args, " "),
+	))
+	if err != nil {
+		return nil, err
+	}
+
+	cli := bufio.NewReader(waiter.Reader)
+
+	// Discard the echo of the command
+	if _, err := cli.ReadString('\n'); err != nil {
+		return nil, err
+	}
+
+	// Read the response to the command
+	out, err := cli.ReadString('\n')
+	if err != nil {
+		return nil, err
+	}
+
+	return []byte(strings.TrimSpace(out)), nil
 }
 
-func PrintRunningContainers() {
-	containers, err := c.ContainerList(context.Background(), docker.ContainerListOptions{})
+func newClient() *client.Client {
+	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		log.Fatalf("Error: Failed to create new docker client: %s", err)
+	}
+
+	return c
+}
+
+// ContainerFromName returns the container with the given name.
+func ContainerFromName(name string) (c *docker.Container, b bool) {
+	containers, err := newClient().ContainerList(context.Background(), docker.ContainerListOptions{})
 	if err != nil {
 		panic(err)
 	}
 
+	foundCount := 0
+
 	for _, ctr := range containers {
-		fmt.Printf("%s %s\n", ctr.ID[:10], ctr.Image)
+		if strings.Trim(ctr.Names[0], "/") == name {
+			c = &ctr
+			b = true
+			foundCount++
+		}
 	}
+
+	if foundCount > 1 {
+		panic(fmt.Sprintf("WARNING: more than 1 docker containers exist with name: %s\n", name))
+	}
+
+	return
 }
