@@ -1,12 +1,14 @@
 package server
 
 import (
+	"archive/tar"
+	"archive/zip"
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"log"
-	"os"
 	"strconv"
 	"strings"
 
@@ -17,10 +19,14 @@ import (
 )
 
 const (
-	defaultPort = 19132
-	protocol    = "UDP"
-	imageName   = "danhaledocker/craftmine:v1.3"
-	anyIP       = "0.0.0.0"
+	defaultPort     = 19132
+	protocol        = "UDP"
+	imageName       = "danhaledocker/craftmine:v1.6"
+	anyIP           = "0.0.0.0"
+	mcDirectory     = "/bedrock"
+	worldDirectory  = "/bedrock/worlds/Bedrock level"
+	worldImportPath = "/bedrock/worlds/Bedrock level/importedWorld.tar"
+	runMCCommand    = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server"
 )
 
 // Run is the equivalent of the following docker command
@@ -68,7 +74,7 @@ func Run(hostPort int, name string) error {
 		return err
 	}
 
-	// Stream server output to stdout
+	/*// Stream server output to stdout
 	waiter, err := c.ContainerAttach(ctx, createResp.ID, docker.ContainerAttachOptions{
 		Stderr: true,
 		Stdout: true,
@@ -82,7 +88,7 @@ func Run(hostPort int, name string) error {
 		if _, err = io.Copy(os.Stdout, waiter.Reader); err != nil {
 			panic(err)
 		}
-	}()
+	}()*/
 
 	// Start the container
 	err = c.ContainerStart(ctx, createResp.ID, docker.ContainerStartOptions{})
@@ -90,7 +96,7 @@ func Run(hostPort int, name string) error {
 		return err
 	}
 
-	// Wait for the container to stop running
+	/*// Wait for the container to stop running
 	statusCh, errCh := c.ContainerWait(ctx, createResp.ID, container.WaitConditionNotRunning)
 	select {
 	case err := <-errCh:
@@ -98,9 +104,80 @@ func Run(hostPort int, name string) error {
 			panic(err)
 		}
 	case <-statusCh:
+	}*/
+
+	return nil
+}
+
+func LoadWorld(containerID, mcworldPath string) error {
+	worldData, err := readZipToTarReader(mcworldPath)
+	if err != nil {
+		return fmt.Errorf("reading .mcworld file to tar archive: %s", err)
+	}
+
+	err = newClient().CopyToContainer(
+		context.Background(),
+		containerID,
+		worldDirectory,
+		worldData,
+		docker.CopyToContainerOptions{},
+	)
+	if err != nil {
+		return err
 	}
 
 	return nil
+}
+
+func readZipToTarReader(mcworldPath string) (*bytes.Buffer, error) {
+	// Open a zip archive for reading.
+	r, err := zip.OpenReader(mcworldPath)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+
+	// Create and add files to the archive.
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+
+	for _, f := range r.File {
+		b, err := f.Open()
+		if err != nil {
+			return nil, err
+		}
+
+		// Read the file body
+		body, err := ioutil.ReadAll(b)
+		if err != nil {
+			return nil, err
+		}
+
+		if err = b.Close(); err != nil {
+			return nil, err
+		}
+
+		// Preserve the file names and permissions in file header
+		hdr := &tar.Header{
+			Name: f.Name,
+			Mode: int64(f.FileInfo().Mode()),
+			Size: int64(len(body)),
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return nil, err
+		}
+
+		// Write the file body
+		if _, err := tw.Write(body); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tw.Close(); err != nil {
+		return nil, err
+	}
+
+	return &buf, nil
 }
 
 func Command(serverID string, args []string) ([]byte, error) {
