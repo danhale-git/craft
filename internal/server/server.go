@@ -180,6 +180,35 @@ func readZipToTarReader(mcworldPath string) (*bytes.Buffer, error) {
 	return &buf, nil
 }
 
+func RunMC(serverID string) (*bufio.Reader, error) {
+	waiter, err := newClient().ContainerAttach(
+		context.Background(),
+		serverID,
+		docker.ContainerAttachOptions{
+			Stdin:  true,
+			Stream: true,
+		},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("attaching container: %s", err)
+	}
+
+	// Write the command to the server cli
+	_, err = waiter.Conn.Write([]byte("pwd; " + runMCCommand + "\n"))
+	if err != nil {
+		return nil, fmt.Errorf("writing to mc cli: %s", err)
+	}
+
+	cli := bufio.NewReader(waiter.Reader)
+
+	// TODO: logging
+	for i := 0; i < 100; i++ {
+		fmt.Println(cli.ReadString('\n'))
+	}
+
+	return cli, nil
+}
+
 func Command(serverID string, args []string) ([]byte, error) {
 	waiter, err := newClient().ContainerAttach(
 		context.Background(),

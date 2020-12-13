@@ -32,6 +32,11 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
+		_, err = server.RunMC(c.ID)
+		if err != nil {
+			return err
+		}
+
 		return nil
 	},
 }
