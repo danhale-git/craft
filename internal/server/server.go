@@ -3,7 +3,6 @@ package server
 import (
 	"archive/tar"
 	"archive/zip"
-	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -202,7 +201,8 @@ func RunMC(serverID string) error {
 	return nil
 }
 
-func Command(serverID string, args []string) ([]byte, error) {
+func Command(serverID string, args []string) error {
+	// TODO: log command entry to the log.txt file on the container
 	waiter, err := newClient().ContainerAttach(
 		context.Background(),
 		serverID,
@@ -215,7 +215,7 @@ func Command(serverID string, args []string) ([]byte, error) {
 	)
 
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	// Write the command to the server cli
@@ -223,10 +223,10 @@ func Command(serverID string, args []string) ([]byte, error) {
 		strings.Join(args, " "),
 	))
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	cli := bufio.NewReader(waiter.Reader)
+	/*cli := bufio.NewReader(waiter.Reader)
 
 	// Discard the echo of the command
 	if _, err := cli.ReadString('\n'); err != nil {
@@ -237,9 +237,9 @@ func Command(serverID string, args []string) ([]byte, error) {
 	out, err := cli.ReadString('\n')
 	if err != nil {
 		return nil, err
-	}
+	}*/
 
-	return []byte(strings.TrimSpace(out)), nil
+	return nil
 }
 
 func newClient() *client.Client {

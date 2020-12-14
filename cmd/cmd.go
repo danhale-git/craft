@@ -23,17 +23,15 @@ var cmdCmd = &cobra.Command{
 			return fmt.Errorf("container '%s' not found", args[0])
 		}
 
-		response, err := server.Command(c.ID, append(args[1:], "\n"))
+		err := server.Command(c.ID, append(args[1:], "\n"))
 		if err != nil {
 			return err
 		}
-
-		fmt.Printf("'%s'", string(response))
 
 		return nil
 	},
 }
 
 func init() {
-	runCmd.AddCommand(cmdCmd)
+	rootCmd.AddCommand(cmdCmd)
 }
