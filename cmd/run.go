@@ -19,7 +19,12 @@ var runCmd = &cobra.Command{
 
 		worldPath, _ := cmd.Flags().GetString("world")
 
-		err := server.Run(19133, name)
+		port, err := cmd.Flags().GetInt("port")
+		if err != nil {
+			return err
+		}
+
+		err = server.Run(port, name)
 		if err != nil {
 			return err
 		}
@@ -49,4 +54,7 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 
 	runCmd.Flags().StringP("world", "w", "", "Path to a .mcworld file to be loaded.")
+
+	// TODO: automatically chose an unused port if not given instead of using default port
+	runCmd.Flags().IntP("port", "p", 19132, "External port players connect to.")
 }
