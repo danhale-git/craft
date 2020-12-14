@@ -1,14 +1,16 @@
 package server
 
 import (
+	"archive/tar"
+	"archive/zip"
+	"bufio"
+	"bytes"
 	"context"
 	"fmt"
-	"io"
+	"io/ioutil"
 	"log"
-	"os"
 	"strconv"
-
-	"golang.org/x/crypto/ssh/terminal"
+	"strings"
 
 	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -16,26 +18,22 @@ import (
 	"github.com/docker/go-connections/nat"
 )
 
-var c *client.Client
-
 const (
-	defaultPort = 19132
-	protocol    = "UDP"
-	imageName   = "danhaledocker/craftmine:v1.3"
-	anyIP       = "0.0.0.0"
+	defaultPort     = 19132
+	protocol        = "UDP"
+	imageName       = "danhaledocker/craftmine:v1.6"
+	anyIP           = "0.0.0.0"
+	mcDirectory     = "/bedrock"
+	worldDirectory  = "/bedrock/worlds/Bedrock level"
+	worldImportPath = "/bedrock/worlds/Bedrock level/importedWorld.tar"
+	runMCCommand    = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server >> log.txt 2>&1"
 )
 
-type Server struct {
-	// Terminal io to docker container bedrock_server process
-	// Container things
-}
-
-// docker run -d -e EULA=TRUE -p <HOST_PORT>:19132/udp danhaledocker/craftmine:<VERSION>
+// Run is the equivalent of the following docker command
+//
+//    docker run -d -e EULA=TRUE -p <HOST_PORT>:19132/udp danhaledocker/craftmine:<VERSION>
 func Run(hostPort int, name string) error {
-	if c == nil {
-		newClient()
-	}
-
+	c := newClient()
 	ctx := context.Background()
 
 	// Create port binding between host ip:port and container port
@@ -51,8 +49,6 @@ func Run(hostPort int, name string) error {
 
 	portBinding := nat.PortMap{containerPort: []nat.PortBinding{hostBinding}}
 
-	//shell := strslice.StrSlice{}
-
 	// Request creation of container
 	createResp, err := c.ContainerCreate(
 		ctx,
@@ -62,7 +58,6 @@ func Run(hostPort int, name string) error {
 			ExposedPorts: nat.PortSet{
 				containerPort: struct{}{},
 			},
-			//Shell: shell,
 			AttachStdin:  true,
 			AttachStdout: true,
 			AttachStderr: true,
@@ -79,20 +74,21 @@ func Run(hostPort int, name string) error {
 		return err
 	}
 
+	/*// Stream server output to stdout
 	waiter, err := c.ContainerAttach(ctx, createResp.ID, docker.ContainerAttachOptions{
 		Stderr: true,
 		Stdout: true,
-		Stdin:  true,
 		Stream: true,
 	})
-
 	if err != nil {
 		return err
 	}
 
-	go io.Copy(os.Stdout, waiter.Reader)
-	//go io.Copy(os.Stderr, waiter.Reader) // this causes an index out of range exception in bufio.go, presumably because the reader is being read from twice. It should probably be copied.
-	go io.Copy(waiter.Conn, os.Stdin)
+	go func() {
+		if _, err = io.Copy(os.Stdout, waiter.Reader); err != nil {
+			panic(err)
+		}
+	}()*/
 
 	// Start the container
 	err = c.ContainerStart(ctx, createResp.ID, docker.ContainerStartOptions{})
@@ -100,20 +96,7 @@ func Run(hostPort int, name string) error {
 		return err
 	}
 
-	// Save terminal state
-	fd := int(os.Stdin.Fd())
-
-	var oldState *terminal.State
-
-	if terminal.IsTerminal(fd) {
-		oldState, err = terminal.MakeRaw(fd)
-		if err != nil {
-			return err
-		}
-		defer terminal.Restore(fd, oldState)
-	}
-
-	// Wait for the container to stop running
+	/*// Wait for the container to stop running
 	statusCh, errCh := c.ContainerWait(ctx, createResp.ID, container.WaitConditionNotRunning)
 	select {
 	case err := <-errCh:
@@ -121,42 +104,173 @@ func Run(hostPort int, name string) error {
 			panic(err)
 		}
 	case <-statusCh:
-	}
-
-	// Restore terminal state
-	terminal.Restore(fd, oldState)
-
-	// Panics if AutoRemove=true
-	/*// Print container logs
-	out, err := c.ContainerLogs(ctx, createResp.ID, types.ContainerLogsOptions{ShowStdout: true})
-	if err != nil {
-		panic(err)
-	}
-
-	b, err := ioutil.ReadAll(out)
-	if err != nil {
-		return nil, err
-	}
-
-	fmt.Println(string(b))*/
+	}*/
 
 	return nil
 }
 
-func newClient() {
-	var err error
-	if c, err = client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation()); err != nil {
-		log.Fatalf("Error: Failed to create new docker client: %s", err)
+func LoadWorld(containerID, mcworldPath string) error {
+	worldData, err := readZipToTarReader(mcworldPath)
+	if err != nil {
+		return fmt.Errorf("reading .mcworld file to tar archive: %s", err)
 	}
+
+	err = newClient().CopyToContainer(
+		context.Background(),
+		containerID,
+		worldDirectory,
+		worldData,
+		docker.CopyToContainerOptions{},
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func PrintRunningContainers() {
-	containers, err := c.ContainerList(context.Background(), docker.ContainerListOptions{})
+func readZipToTarReader(mcworldPath string) (*bytes.Buffer, error) {
+	// Open a zip archive for reading.
+	r, err := zip.OpenReader(mcworldPath)
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+
+	// Create and add files to the archive.
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+
+	for _, f := range r.File {
+		b, err := f.Open()
+		if err != nil {
+			return nil, err
+		}
+
+		// Read the file body
+		body, err := ioutil.ReadAll(b)
+		if err != nil {
+			return nil, err
+		}
+
+		if err = b.Close(); err != nil {
+			return nil, err
+		}
+
+		// Preserve the file names and permissions in file header
+		hdr := &tar.Header{
+			Name: f.Name,
+			Mode: int64(f.FileInfo().Mode()),
+			Size: int64(len(body)),
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return nil, err
+		}
+
+		// Write the file body
+		if _, err := tw.Write(body); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tw.Close(); err != nil {
+		return nil, err
+	}
+
+	return &buf, nil
+}
+
+func RunMC(serverID string) error {
+	waiter, err := newClient().ContainerAttach(
+		context.Background(),
+		serverID,
+		docker.ContainerAttachOptions{
+			Stdin:  true,
+			Stream: true,
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("attaching container: %s", err)
+	}
+
+	// Write the command to the server cli
+	_, err = waiter.Conn.Write([]byte("pwd; " + runMCCommand + "\n"))
+	if err != nil {
+		return fmt.Errorf("writing to mc cli: %s", err)
+	}
+
+	return nil
+}
+
+func Command(serverID string, args []string) ([]byte, error) {
+	waiter, err := newClient().ContainerAttach(
+		context.Background(),
+		serverID,
+		docker.ContainerAttachOptions{
+			Stderr: true,
+			Stdout: true,
+			Stdin:  true,
+			Stream: true,
+		},
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	// Write the command to the server cli
+	_, err = waiter.Conn.Write([]byte(
+		strings.Join(args, " "),
+	))
+	if err != nil {
+		return nil, err
+	}
+
+	cli := bufio.NewReader(waiter.Reader)
+
+	// Discard the echo of the command
+	if _, err := cli.ReadString('\n'); err != nil {
+		return nil, err
+	}
+
+	// Read the response to the command
+	out, err := cli.ReadString('\n')
+	if err != nil {
+		return nil, err
+	}
+
+	return []byte(strings.TrimSpace(out)), nil
+}
+
+func newClient() *client.Client {
+	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		log.Fatalf("Error: Failed to create new docker client: %s", err)
+	}
+
+	return c
+}
+
+// ContainerFromName returns the container with the given name.
+func ContainerFromName(name string) (c *docker.Container, b bool) {
+	containers, err := newClient().ContainerList(context.Background(), docker.ContainerListOptions{})
 	if err != nil {
 		panic(err)
 	}
 
+	foundCount := 0
+
 	for _, ctr := range containers {
-		fmt.Printf("%s %s\n", ctr.ID[:10], ctr.Image)
+		if strings.Trim(ctr.Names[0], "/") == name {
+			c = &ctr
+			b = true
+			foundCount++
+		}
 	}
+
+	if foundCount > 1 {
+		panic(fmt.Sprintf("WARNING: more than 1 docker containers exist with name: %s\n", name))
+	}
+
+	return
 }
