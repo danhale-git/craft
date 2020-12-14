@@ -26,7 +26,7 @@ const (
 	mcDirectory     = "/bedrock"
 	worldDirectory  = "/bedrock/worlds/Bedrock level"
 	worldImportPath = "/bedrock/worlds/Bedrock level/importedWorld.tar"
-	runMCCommand    = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server"
+	runMCCommand    = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server >> log.txt 2>&1"
 )
 
 // Run is the equivalent of the following docker command
@@ -180,7 +180,7 @@ func readZipToTarReader(mcworldPath string) (*bytes.Buffer, error) {
 	return &buf, nil
 }
 
-func RunMC(serverID string) (*bufio.Reader, error) {
+func RunMC(serverID string) error {
 	waiter, err := newClient().ContainerAttach(
 		context.Background(),
 		serverID,
@@ -190,23 +190,16 @@ func RunMC(serverID string) (*bufio.Reader, error) {
 		},
 	)
 	if err != nil {
-		return nil, fmt.Errorf("attaching container: %s", err)
+		return fmt.Errorf("attaching container: %s", err)
 	}
 
 	// Write the command to the server cli
 	_, err = waiter.Conn.Write([]byte("pwd; " + runMCCommand + "\n"))
 	if err != nil {
-		return nil, fmt.Errorf("writing to mc cli: %s", err)
+		return fmt.Errorf("writing to mc cli: %s", err)
 	}
 
-	cli := bufio.NewReader(waiter.Reader)
-
-	// TODO: logging
-	for i := 0; i < 100; i++ {
-		fmt.Println(cli.ReadString('\n'))
-	}
-
-	return cli, nil
+	return nil
 }
 
 func Command(serverID string, args []string) ([]byte, error) {

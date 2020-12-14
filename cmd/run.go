@@ -12,12 +12,9 @@ import (
 var runCmd = &cobra.Command{
 	Use: "run",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		worldPath, err := cmd.Flags().GetString("world")
-		if err != nil {
-			return err
-		}
+		worldPath, _ := cmd.Flags().GetString("world")
 
-		err = server.Run(19133, "mc")
+		err := server.Run(19133, "mc")
 		if err != nil {
 			return err
 		}
@@ -27,12 +24,14 @@ var runCmd = &cobra.Command{
 			log.Fatal("container doesn't exist")
 		}
 
-		err = server.LoadWorld(c.ID, worldPath)
-		if err != nil {
-			return err
+		if worldPath != "" {
+			err = server.LoadWorld(c.ID, worldPath)
+			if err != nil {
+				return err
+			}
 		}
 
-		_, err = server.RunMC(c.ID)
+		err = server.RunMC(c.ID)
 		if err != nil {
 			return err
 		}
@@ -45,5 +44,4 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 
 	runCmd.Flags().StringP("world", "w", "", "Path to a .mcworld file to be loaded.")
-	_ = runCmd.MarkFlagRequired("world")
 }
