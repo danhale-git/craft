@@ -11,15 +11,20 @@ import (
 // runCmd represents the run command
 var runCmd = &cobra.Command{
 	Use: "run",
+	Args: func(cmd *cobra.Command, args []string) error {
+		return cobra.RangeArgs(1, 1)(cmd, args)
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		name := args[0]
+
 		worldPath, _ := cmd.Flags().GetString("world")
 
-		err := server.Run(19133, "mc")
+		err := server.Run(19133, name)
 		if err != nil {
 			return err
 		}
 
-		c, ok := server.ContainerFromName("mc")
+		c, ok := server.ContainerFromName(name)
 		if !ok {
 			log.Fatal("container doesn't exist")
 		}
