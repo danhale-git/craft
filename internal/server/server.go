@@ -246,8 +246,6 @@ func Backup(containerID, containerName, destPath string) error {
 				return fmt.Errorf("creating backup file at '%s': %s", destPath, err)
 			}
 
-			fmt.Println("length", z.Len())
-
 			_, err = f.Write(z.Bytes())
 
 			// This command returns two lines in response. Read the second one to discard it.
@@ -294,9 +292,10 @@ func tarReaderToZipData(data io.ReadCloser) (*bytes.Buffer, error) {
 			return nil, fmt.Errorf("calling next() in tar archive: %s", err)
 		}
 
+		// The worlds/'Bedrock level' directory was copied. Strip that directory from the file paths to move everything
+		// up one level resulting in a valid .mcworld zip.
 		name := strings.Replace(hdr.Name, "Bedrock level/", "", 1)
-		fmt.Println(hdr.Name, name)
-
+		// Skip the file representing the 'Bedrock level' directory.
 		if len(strings.TrimSpace(name)) == 0 {
 			continue
 		}
