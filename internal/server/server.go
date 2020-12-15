@@ -7,10 +7,14 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
+	"os"
+	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -191,7 +195,7 @@ func RunMC(containerID string) error {
 	return nil
 }
 
-func Backup(containerID string) error {
+func Backup(containerID, containerName, destPath string) error {
 	logs := logReader(containerID)
 
 	// save hold
@@ -200,7 +204,11 @@ func Backup(containerID string) error {
 		return err
 	}
 
-	if strings.TrimSpace(sh) != "Saving..." {
+	switch strings.TrimSpace(sh) {
+	case "Saving...":
+	case "The command is already running":
+		break
+	default:
 		return fmt.Errorf("unexpected response to `save hold`: '%s'", sh)
 	}
 
@@ -211,15 +219,47 @@ func Backup(containerID string) error {
 			return err
 		}
 
+		// Ready for backup
 		if strings.HasPrefix(sq, "Data saved. Files are now ready to be copied.") {
-			// This command returns two lines in response.
-			if _, err := logs.ReadString('\n'); err != nil {
-				return fmt.Errorf("reading 'save query' file list response line: %s", err)
-			}
 			// TODO: back up data
-			fmt.Println("COPY STUFF NOW THEN BREAK")
+			data, _, err := newClient().CopyFromContainer(
+				context.Background(),
+				containerID,
+				worldDirectory,
+			)
+			if err != nil {
+				return fmt.Errorf("copying world data from server: %s", err)
+			}
+
+			// Convert backup data from tar to zip and save to disk
+			z, err := tarReaderToZipData(data)
+			if err != nil {
+				return fmt.Errorf("converting tar to zip: %s", err)
+			}
+
+			y, m, d := time.Now().Date()
+			fileName := fmt.Sprintf("%s_backup_%d-%d-%d.mcworld", containerName, y, m, d)
+			p := path.Join(destPath, fileName)
+
+			f, err := os.Create(p)
+			if err != nil {
+				return fmt.Errorf("creating backup file at '%s': %s", destPath, err)
+			}
+
+			fmt.Println("length", z.Len())
+
+			_, err = f.Write(z.Bytes())
+
+			// This command returns two lines in response. Read the second one to discard it.
+			if _, err := logs.ReadString('\n'); err != nil {
+				return fmt.Errorf("reading 'save query' file list response: %s", err)
+			}
+
 			break
 		}
+
+		// Give the game time to hold.
+		time.Sleep(100 * time.Millisecond)
 	}
 
 	// save resume
@@ -235,18 +275,67 @@ func Backup(containerID string) error {
 	return nil
 }
 
+// readZipToTarReader reads each file in a zip archive, writes it to a tar archive and returns the tar archive reader.
+func tarReaderToZipData(data io.ReadCloser) (*bytes.Buffer, error) {
+	tr := tar.NewReader(data)
+	defer data.Close()
+
+	buf := new(bytes.Buffer)
+	w := zip.NewWriter(buf)
+
+	for {
+		// Next file or end of archive
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			return nil, fmt.Errorf("calling next() in tar archive: %s", err)
+		}
+
+		name := strings.Replace(hdr.Name, "Bedrock level/", "", 1)
+		fmt.Println(hdr.Name, name)
+
+		if len(strings.TrimSpace(name)) == 0 {
+			continue
+		}
+
+		f, err := w.Create(name)
+		if err != nil {
+			return nil, fmt.Errorf("creating file in zip archive: %s", err)
+		}
+
+		b, err := ioutil.ReadAll(tr)
+		if err != nil {
+			return nil, fmt.Errorf("reading tar data: %s", err)
+		}
+
+		if _, err = f.Write(b); err != nil {
+			return nil, fmt.Errorf("writing zip data: %s", err)
+		}
+	}
+
+	err := w.Close()
+	if err != nil {
+		return nil, fmt.Errorf("closing buffer: %s", err)
+	}
+
+	return buf, nil
+}
+
 func commandResponse(containerID, cmd string, logs *bufio.Reader) (string, error) {
 	err := command(containerID, cmd)
 	if err != nil {
 		return "", fmt.Errorf("running command `%s`: %s", cmd, err)
 	}
 
-	if echo, err := logs.ReadString('\n'); err != nil {
+	// Read command echo to discard it
+	if _, err := logs.ReadString('\n'); err != nil {
 		return "", fmt.Errorf("retrieving echo for command `%s`: %s", cmd, err)
-	} else {
-		fmt.Println("DEBUG ignored:", echo)
 	}
 
+	// Read command response
 	response, err := logs.ReadString('\n')
 	if err != nil {
 		return "", fmt.Errorf("retrieving `%s` response: %s", cmd, err)

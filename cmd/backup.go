@@ -20,7 +20,14 @@ var backupCmd = &cobra.Command{
 			return fmt.Errorf("container '%s' does not exist", args[0])
 		}
 
-		server.Backup(c.ID)
+		out, err := cmd.Flags().GetString("out-dir")
+		if err != nil {
+			return err
+		}
+
+		if err = server.Backup(c.ID, c.Names[0], out); err != nil {
+			return fmt.Errorf("backing up world: %s", err)
+		}
 
 		return nil
 	},
@@ -28,4 +35,7 @@ var backupCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(backupCmd)
+
+	backupCmd.Flags().StringP("out-dir", "o", "", "The directory where this backup will be saved as a .mcworld file.")
+	_ = backupCmd.MarkFlagRequired("out-dir")
 }
