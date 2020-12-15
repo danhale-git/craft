@@ -18,19 +18,31 @@ import (
 )
 
 const (
-	defaultPort     = 19132
-	protocol        = "UDP"
-	imageName       = "danhaledocker/craftmine:v1.6"
-	anyIP           = "0.0.0.0"
-	mcDirectory     = "/bedrock"
-	worldDirectory  = "/bedrock/worlds/Bedrock level"
-	worldImportPath = "/bedrock/worlds/Bedrock level/importedWorld.tar"
-	runMCCommand    = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server >> log.txt 2>&1"
+	defaultPort = 19132                          // Default port for player connections
+	protocol    = "UDP"                          // MC uses UDP
+	imageName   = "danhaledocker/craftmine:v1.6" // The name of the docker image to use
+	anyIP       = "0.0.0.0"                      // Refers to any/all IPv4 addresses
+
+	// Directory to save imported world files
+	worldDirectory = "/bedrock/worlds/Bedrock level"
+
+	// Run the bedrock_server executable and append its output to log.txt
+	runMCCommand = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server >> log.txt 2>&1"
 )
+
+// newClient creates a default docker client.
+func newClient() *client.Client {
+	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		log.Fatalf("Error: Failed to create new docker client: %s", err)
+	}
+
+	return c
+}
 
 // Run is the equivalent of the following docker command
 //
-//    docker run -d -e EULA=TRUE -p <HOST_PORT>:19132/udp danhaledocker/craftmine:<VERSION>
+//    docker run -d -e EULA=TRUE -p <HOST_PORT>:19132/udp <IMAGE_NAME>
 func Run(hostPort int, name string) error {
 	c := newClient()
 	ctx := context.Background()
@@ -73,41 +85,16 @@ func Run(hostPort int, name string) error {
 		return err
 	}
 
-	/*// Stream server output to stdout
-	waiter, err := c.ContainerAttach(ctx, createResp.ID, docker.ContainerAttachOptions{
-		Stderr: true,
-		Stdout: true,
-		Stream: true,
-	})
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		if _, err = io.Copy(os.Stdout, waiter.Reader); err != nil {
-			panic(err)
-		}
-	}()*/
-
 	// Start the container
 	err = c.ContainerStart(ctx, createResp.ID, docker.ContainerStartOptions{})
 	if err != nil {
 		return err
 	}
 
-	/*// Wait for the container to stop running
-	statusCh, errCh := c.ContainerWait(ctx, createResp.ID, container.WaitConditionNotRunning)
-	select {
-	case err := <-errCh:
-		if err != nil {
-			panic(err)
-		}
-	case <-statusCh:
-	}*/
-
 	return nil
 }
 
+// LoadWorld reads a .mcworld zip file and copies the contents to the active world directory for this container.
 func LoadWorld(containerID, mcworldPath string) error {
 	worldData, err := readZipToTarReader(mcworldPath)
 	if err != nil {
@@ -128,6 +115,7 @@ func LoadWorld(containerID, mcworldPath string) error {
 	return nil
 }
 
+// readZipToTarReader reads each file in a zip archive, writes it to a tar archive and returns the tar archive reader.
 func readZipToTarReader(mcworldPath string) (*bytes.Buffer, error) {
 	// Open a zip archive for reading.
 	r, err := zip.OpenReader(mcworldPath)
@@ -179,10 +167,11 @@ func readZipToTarReader(mcworldPath string) (*bytes.Buffer, error) {
 	return &buf, nil
 }
 
-func RunMC(serverID string) error {
+// RunMC runs the mc server process on a container.
+func RunMC(containerID string) error {
 	waiter, err := newClient().ContainerAttach(
 		context.Background(),
-		serverID,
+		containerID,
 		docker.ContainerAttachOptions{
 			Stdin:  true,
 			Stream: true,
@@ -193,7 +182,7 @@ func RunMC(serverID string) error {
 	}
 
 	// Write the command to the server cli
-	_, err = waiter.Conn.Write([]byte("pwd; " + runMCCommand + "\n"))
+	_, err = waiter.Conn.Write([]byte(runMCCommand + "\n"))
 	if err != nil {
 		return fmt.Errorf("writing to mc cli: %s", err)
 	}
@@ -201,14 +190,13 @@ func RunMC(serverID string) error {
 	return nil
 }
 
-func Command(serverID string, args []string) error {
-	// TODO: log command entry to the log.txt file on the container
+// Command runs the given arguments separated by spaces as a command in the bedrock_server process cli on a container.
+func Command(containerID string, args []string) error {
+	// Attach to the container
 	waiter, err := newClient().ContainerAttach(
 		context.Background(),
-		serverID,
+		containerID,
 		docker.ContainerAttachOptions{
-			Stderr: true,
-			Stdout: true,
 			Stdin:  true,
 			Stream: true,
 		},
@@ -218,37 +206,17 @@ func Command(serverID string, args []string) error {
 		return err
 	}
 
-	// Write the command to the server cli
+	commandString := strings.Join(args, " ") + "\n"
+
+	// Write the command to the bedrock_server process cli
 	_, err = waiter.Conn.Write([]byte(
-		strings.Join(args, " "),
+		commandString,
 	))
 	if err != nil {
 		return err
 	}
 
-	/*cli := bufio.NewReader(waiter.Reader)
-
-	// Discard the echo of the command
-	if _, err := cli.ReadString('\n'); err != nil {
-		return nil, err
-	}
-
-	// Read the response to the command
-	out, err := cli.ReadString('\n')
-	if err != nil {
-		return nil, err
-	}*/
-
 	return nil
-}
-
-func newClient() *client.Client {
-	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		log.Fatalf("Error: Failed to create new docker client: %s", err)
-	}
-
-	return c
 }
 
 // ContainerFromName returns the container with the given name.
@@ -268,8 +236,9 @@ func ContainerFromName(name string) (c *docker.Container, b bool) {
 		}
 	}
 
+	// This should never happen as docker doesn't allow containers with matching namess
 	if foundCount > 1 {
-		panic(fmt.Sprintf("WARNING: more than 1 docker containers exist with name: %s\n", name))
+		panic(fmt.Sprintf("ERROR: more than 1 docker containers exist with name: %s\n", name))
 	}
 
 	return

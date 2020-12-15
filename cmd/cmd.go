@@ -11,19 +11,18 @@ import (
 var cmdCmd = &cobra.Command{
 	Use: "cmd",
 	Args: func(cmd *cobra.Command, args []string) error {
-		if len(args) < 2 {
-			return fmt.Errorf("not enough arguments: 'craft run cmd <servername> <command>`")
-		}
-
-		return nil
+		return cobra.RangeArgs(2, len(args))(cmd, args)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, ok := server.ContainerFromName(args[0])
+		containerName := args[0]
+		command := args[1:]
+
+		c, ok := server.ContainerFromName(containerName)
 		if !ok {
 			return fmt.Errorf("container '%s' not found", args[0])
 		}
 
-		err := server.Command(c.ID, append(args[1:], "\n"))
+		err := server.Command(c.ID, command)
 		if err != nil {
 			return err
 		}
