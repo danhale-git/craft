@@ -363,6 +363,25 @@ func logReader(containerID string) *bufio.Reader {
 	return bufio.NewReader(logs)
 }
 
+func Tail(containerID string, tail int) *bufio.Reader {
+	logs, err := newClient().ContainerLogs(
+		context.Background(),
+		containerID,
+		docker.ContainerLogsOptions{
+			ShowStdout: true,
+			ShowStderr: true,
+			Tail:       strconv.Itoa(tail),
+			Follow:     true,
+		},
+	)
+
+	if err != nil {
+		log.Fatalf("creating client: %s", err)
+	}
+
+	return bufio.NewReader(logs)
+}
+
 // Command runs the given arguments separated by spaces as a command in  the bedrock_server process cli on a container.
 func Command(containerID string, args []string) error {
 	// TODO: Log this command
