@@ -17,8 +17,7 @@ var runCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 
-		worldPath, _ := cmd.Flags().GetString("world")
-
+		// Create a container for the server
 		port, err := cmd.Flags().GetInt("port")
 		if err != nil {
 			return err
@@ -29,11 +28,14 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
+		// Get the container ID
 		c, ok := server.ContainerFromName(name)
 		if !ok {
 			log.Fatal("container doesn't exist")
 		}
 
+		// If a world is specified, install it
+		worldPath, _ := cmd.Flags().GetString("world")
 		if worldPath != "" {
 			err = server.LoadWorld(c.ID, worldPath)
 			if err != nil {
@@ -41,6 +43,7 @@ var runCmd = &cobra.Command{
 			}
 		}
 
+		// Run the bedrock_server process
 		err = server.RunMC(c.ID)
 		if err != nil {
 			return err
