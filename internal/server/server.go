@@ -3,6 +3,7 @@ package server
 import (
 	"archive/tar"
 	"archive/zip"
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -27,7 +28,7 @@ const (
 	worldDirectory = "/bedrock/worlds/Bedrock level"
 
 	// Run the bedrock_server executable and append its output to log.txt
-	runMCCommand = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server >> log.txt 2>&1"
+	runMCCommand = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server" // >> log.txt 2>&1"
 )
 
 // newClient creates a default docker client.
@@ -190,8 +191,92 @@ func RunMC(containerID string) error {
 	return nil
 }
 
-// Command runs the given arguments separated by spaces as a command in the bedrock_server process cli on a container.
+func Backup(containerID string) error {
+	logs := logReader(containerID)
+
+	// save hold
+	sh, err := commandResponse(containerID, "save hold", logs)
+	if err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(sh) != "Saving..." {
+		return fmt.Errorf("unexpected response to `save hold`: '%s'", sh)
+	}
+
+	// save query
+	for {
+		sq, err := commandResponse(containerID, "save query", logs)
+		if err != nil {
+			return err
+		}
+
+		if strings.HasPrefix(sq, "Data saved. Files are now ready to be copied.") {
+			// This command returns two lines in response.
+			if _, err := logs.ReadString('\n'); err != nil {
+				return fmt.Errorf("reading 'save query' file list response line: %s", err)
+			}
+			// TODO: back up data
+			fmt.Println("COPY STUFF NOW THEN BREAK")
+			break
+		}
+	}
+
+	// save resume
+	sr, err := commandResponse(containerID, "save resume", logs)
+	if err != nil {
+		return err
+	}
+
+	if strings.TrimSpace(sr) != "Changes to the level are resumed." {
+		return fmt.Errorf("unexpected response to `save resume`: '%s'", sr)
+	}
+
+	return nil
+}
+
+func commandResponse(containerID, cmd string, logs *bufio.Reader) (string, error) {
+	err := command(containerID, cmd)
+	if err != nil {
+		return "", fmt.Errorf("running command `%s`: %s", cmd, err)
+	}
+
+	if echo, err := logs.ReadString('\n'); err != nil {
+		return "", fmt.Errorf("retrieving echo for command `%s`: %s", cmd, err)
+	} else {
+		fmt.Println("DEBUG ignored:", echo)
+	}
+
+	response, err := logs.ReadString('\n')
+	if err != nil {
+		return "", fmt.Errorf("retrieving `%s` response: %s", cmd, err)
+	}
+
+	return response, nil
+}
+
+func logReader(containerID string) *bufio.Reader {
+	logs, err := newClient().ContainerLogs(
+		context.Background(),
+		containerID,
+		docker.ContainerLogsOptions{
+			ShowStdout: true,
+			ShowStderr: true,
+			Tail:       "0",
+			Follow:     true,
+		},
+	)
+
+	if err != nil {
+		log.Fatalf("creating client: %s", err)
+	}
+
+	return bufio.NewReader(logs)
+}
+
+// Command runs the given arguments separated by spaces as a command in  the bedrock_server process cli on a container.
 func Command(containerID string, args []string) error {
+	// TODO: Log this command
 	// Attach to the container
 	waiter, err := newClient().ContainerAttach(
 		context.Background(),
@@ -217,6 +302,9 @@ func Command(containerID string, args []string) error {
 	}
 
 	return nil
+}
+func command(containerID string, cmd string) error {
+	return Command(containerID, strings.Split(cmd, " "))
 }
 
 // ContainerFromName returns the container with the given name.
