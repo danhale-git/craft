@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/danhale-git/craft/internal/server"
+	"github.com/danhale-git/craft/internal/docker"
 
 	"github.com/spf13/cobra"
 )
@@ -15,7 +15,7 @@ var backupCmd = &cobra.Command{
 		return cobra.RangeArgs(1, 1)(cmd, args)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, ok := server.ContainerFromName(args[0])
+		c, ok := docker.ContainerFromName(args[0])
 		if !ok {
 			return fmt.Errorf("container '%s' does not exist", args[0])
 		}
@@ -25,7 +25,7 @@ var backupCmd = &cobra.Command{
 			return err
 		}
 
-		if err = server.Backup(c.ID, c.Names[0], out); err != nil {
+		if err = docker.Backup(c.ID, c.Names[0], out); err != nil {
 			return fmt.Errorf("backing up world: %s", err)
 		}
 

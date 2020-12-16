@@ -1,4 +1,4 @@
-package server
+package docker
 
 import (
 	"archive/tar"

@@ -3,7 +3,7 @@ package cmd
 import (
 	"log"
 
-	"github.com/danhale-git/craft/internal/server"
+	"github.com/danhale-git/craft/internal/docker"
 
 	"github.com/spf13/cobra"
 )
@@ -23,13 +23,13 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
-		err = server.Run(port, name)
+		err = docker.Run(port, name)
 		if err != nil {
 			return err
 		}
 
 		// Get the container ID
-		c, ok := server.ContainerFromName(name)
+		c, ok := docker.ContainerFromName(name)
 		if !ok {
 			log.Fatal("container doesn't exist")
 		}
@@ -37,7 +37,7 @@ var runCmd = &cobra.Command{
 		// If a world is specified, copy it
 		worldPath, _ := cmd.Flags().GetString("world")
 		if worldPath != "" {
-			err = server.LoadWorld(c.ID, worldPath)
+			err = docker.CopyWorldToContainer(c.ID, worldPath)
 			if err != nil {
 				return err
 			}
@@ -46,14 +46,14 @@ var runCmd = &cobra.Command{
 		// If a world is specified, copy it
 		propsPath, _ := cmd.Flags().GetString("server-properties")
 		if propsPath != "" {
-			err = server.LoadServerProperties(c.ID, propsPath)
+			err = docker.LoadServerProperties(c.ID, propsPath)
 			if err != nil {
 				return err
 			}
 		}
 
 		// Run the bedrock_server process
-		err = server.RunMC(c.ID)
+		err = docker.RunMC(c.ID)
 		if err != nil {
 			return err
 		}

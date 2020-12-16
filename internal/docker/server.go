@@ -1,4 +1,4 @@
-package server
+package docker
 
 import (
 	"archive/zip"
@@ -96,8 +96,8 @@ func Run(hostPort int, name string) error {
 	return nil
 }
 
-// LoadWorld reads a .mcworld zip file and copies the contents to the active world directory for this container.
-func LoadWorld(containerID, mcworldPath string) error {
+// CopyWorldToContainer reads a .mcworld zip file and copies the contents to the active world directory for this container.
+func CopyWorldToContainer(containerID, mcworldPath string) error {
 	// Open a zip archive for reading.
 	r, err := zip.OpenReader(mcworldPath)
 	if err != nil {

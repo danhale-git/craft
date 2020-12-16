@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/danhale-git/craft/internal/server"
+	"github.com/danhale-git/craft/internal/docker"
 	"github.com/spf13/cobra"
 )
 
@@ -17,12 +17,12 @@ var cmdCmd = &cobra.Command{
 		containerName := args[0]
 		command := args[1:]
 
-		c, ok := server.ContainerFromName(containerName)
+		c, ok := docker.ContainerFromName(containerName)
 		if !ok {
 			return fmt.Errorf("container '%s' not found", args[0])
 		}
 
-		err := server.Command(c.ID, command)
+		err := docker.Command(c.ID, command)
 		if err != nil {
 			return err
 		}
