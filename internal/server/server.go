@@ -105,23 +105,9 @@ func LoadWorld(containerID, mcworldPath string) error {
 	}
 	defer r.Close()
 
-	worldData, err := zipToTar(r)
-	if err != nil {
-		return fmt.Errorf("reading .mcworld file to tar archive: %s", err)
-	}
+	w := WorldData{ReadCloser: r}
 
-	err = newClient().CopyToContainer(
-		context.Background(),
-		containerID,
-		worldDirectory,
-		worldData,
-		docker.CopyToContainerOptions{},
-	)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return copyToContainer(containerID, worldDirectory, &w)
 }
 
 func LoadServerProperties(containerID, propsPath string) error {
@@ -143,6 +129,21 @@ func LoadServerProperties(containerID, propsPath string) error {
 		containerID,
 		mcDirectory,
 		propsTar,
+		docker.CopyToContainerOptions{},
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func copyToContainer(containerID, path string, zt ZipTar) error {
+	err := newClient().CopyToContainer(
+		context.Background(),
+		containerID,
+		path,
+		zt.Tar(),
 		docker.CopyToContainerOptions{},
 	)
 	if err != nil {

@@ -7,9 +7,41 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"os"
 	"strings"
 )
+
+type (
+	// ZipTar is some data that can be either a zip or a tar archive
+	ZipTar interface {
+		Zip() *zip.ReadCloser
+		Tar() *bytes.Buffer
+	}
+
+	// WorldData is a .mcworld zip archive
+	WorldData struct {
+		*zip.ReadCloser
+	}
+
+	// ServerProperties is the body of a server.properties file
+	ServerProperties struct {
+		*bytes.Reader
+	}
+)
+
+func (w *WorldData) Zip() *zip.ReadCloser {
+	return w.ReadCloser
+}
+
+func (w *WorldData) Tar() *bytes.Buffer {
+	t, err := zipToTar(w.ReadCloser)
+	if err != nil {
+		log.Fatalf("Failed converting world data to tar archive.")
+	}
+
+	return t
+}
 
 // zipToTar reads each file in a zip archive and writes it to a tar archive. A buffer of the tar archive data
 // is returned, or an error.
