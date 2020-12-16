@@ -1,14 +1,10 @@
 package server
 
 import (
-	"archive/tar"
 	"archive/zip"
 	"bufio"
-	"bytes"
 	"context"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -30,6 +26,7 @@ const (
 
 	// Directory to save imported world files
 	worldDirectory = "/bedrock/worlds/Bedrock level"
+	mcDirectory    = "/bedrock"
 
 	// Run the bedrock_server executable and append its output to log.txt
 	runMCCommand = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server" // >> log.txt 2>&1"
@@ -101,7 +98,14 @@ func Run(hostPort int, name string) error {
 
 // LoadWorld reads a .mcworld zip file and copies the contents to the active world directory for this container.
 func LoadWorld(containerID, mcworldPath string) error {
-	worldData, err := readZipToTarReader(mcworldPath)
+	// Open a zip archive for reading.
+	r, err := zip.OpenReader(mcworldPath)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+
+	worldData, err := zipToTar(r)
 	if err != nil {
 		return fmt.Errorf("reading .mcworld file to tar archive: %s", err)
 	}
@@ -120,56 +124,32 @@ func LoadWorld(containerID, mcworldPath string) error {
 	return nil
 }
 
-// readZipToTarReader reads each file in a zip archive, writes it to a tar archive and returns the tar archive reader.
-func readZipToTarReader(mcworldPath string) (*bytes.Buffer, error) {
-	// Open a zip archive for reading.
-	r, err := zip.OpenReader(mcworldPath)
+func LoadServerProperties(containerID, propsPath string) error {
+	propsFile, err := os.Open(propsPath)
 	if err != nil {
-		return nil, err
-	}
-	defer r.Close()
-
-	// Create and add files to the archive.
-	var buf bytes.Buffer
-	tw := tar.NewWriter(&buf)
-
-	for _, f := range r.File {
-		b, err := f.Open()
-		if err != nil {
-			return nil, err
-		}
-
-		// Read the file body
-		body, err := ioutil.ReadAll(b)
-		if err != nil {
-			return nil, err
-		}
-
-		if err = b.Close(); err != nil {
-			return nil, err
-		}
-
-		// Preserve the file names and permissions in file header
-		hdr := &tar.Header{
-			Name: f.Name,
-			Mode: int64(f.FileInfo().Mode()),
-			Size: int64(len(body)),
-		}
-		if err := tw.WriteHeader(hdr); err != nil {
-			return nil, err
-		}
-
-		// Write the file body
-		if _, err := tw.Write(body); err != nil {
-			return nil, err
-		}
+		return err
 	}
 
-	if err := tw.Close(); err != nil {
-		return nil, err
+	files := make(map[string]*os.File)
+	files["server.properties"] = propsFile
+
+	propsTar, err := toTar(files)
+	if err != nil {
+		return err
 	}
 
-	return &buf, nil
+	err = newClient().CopyToContainer(
+		context.Background(),
+		containerID,
+		mcDirectory,
+		propsTar,
+		docker.CopyToContainerOptions{},
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // RunMC runs the mc server process on a container.
@@ -232,7 +212,7 @@ func Backup(containerID, containerName, destPath string) error {
 			}
 
 			// Convert backup data from tar to zip and save to disk
-			z, err := tarReaderToZipData(data)
+			z, err := tarToZip(data)
 			if err != nil {
 				return fmt.Errorf("converting tar to zip: %s", err)
 			}
@@ -271,56 +251,6 @@ func Backup(containerID, containerName, destPath string) error {
 	}
 
 	return nil
-}
-
-// readZipToTarReader reads each file in a zip archive, writes it to a tar archive and returns the tar archive reader.
-func tarReaderToZipData(data io.ReadCloser) (*bytes.Buffer, error) {
-	tr := tar.NewReader(data)
-	defer data.Close()
-
-	buf := new(bytes.Buffer)
-	w := zip.NewWriter(buf)
-
-	for {
-		// Next file or end of archive
-		hdr, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-
-		if err != nil {
-			return nil, fmt.Errorf("calling next() in tar archive: %s", err)
-		}
-
-		// The worlds/'Bedrock level' directory was copied. Strip that directory from the file paths to move everything
-		// up one level resulting in a valid .mcworld zip.
-		name := strings.Replace(hdr.Name, "Bedrock level/", "", 1)
-		// Skip the file representing the 'Bedrock level' directory.
-		if len(strings.TrimSpace(name)) == 0 {
-			continue
-		}
-
-		f, err := w.Create(name)
-		if err != nil {
-			return nil, fmt.Errorf("creating file in zip archive: %s", err)
-		}
-
-		b, err := ioutil.ReadAll(tr)
-		if err != nil {
-			return nil, fmt.Errorf("reading tar data: %s", err)
-		}
-
-		if _, err = f.Write(b); err != nil {
-			return nil, fmt.Errorf("writing zip data: %s", err)
-		}
-	}
-
-	err := w.Close()
-	if err != nil {
-		return nil, fmt.Errorf("closing buffer: %s", err)
-	}
-
-	return buf, nil
 }
 
 func commandResponse(containerID, cmd string, logs *bufio.Reader) (string, error) {

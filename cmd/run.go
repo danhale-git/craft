@@ -34,10 +34,19 @@ var runCmd = &cobra.Command{
 			log.Fatal("container doesn't exist")
 		}
 
-		// If a world is specified, install it
+		// If a world is specified, copy it
 		worldPath, _ := cmd.Flags().GetString("world")
 		if worldPath != "" {
 			err = server.LoadWorld(c.ID, worldPath)
+			if err != nil {
+				return err
+			}
+		}
+
+		// If a world is specified, copy it
+		propsPath, _ := cmd.Flags().GetString("server-properties")
+		if propsPath != "" {
+			err = server.LoadServerProperties(c.ID, propsPath)
 			if err != nil {
 				return err
 			}
@@ -56,7 +65,8 @@ var runCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(runCmd)
 
-	runCmd.Flags().StringP("world", "w", "", "Path to a .mcworld file to be loaded.")
+	runCmd.Flags().String("world", "", "Path to a .mcworld file to be loaded.")
+	runCmd.Flags().String("server-properties", "", "Path to a server.properties file to be loaded.")
 
 	// TODO: automatically chose an unused port if not given instead of using default port
 	runCmd.Flags().IntP("port", "p", 19132, "External port players connect to.")
