@@ -26,7 +26,7 @@ type (
 
 	// ServerProperties is the body of a server.properties file
 	ServerProperties struct {
-		*bytes.Reader
+		*os.File
 	}
 )
 
@@ -36,6 +36,23 @@ func (w *WorldData) Zip() *zip.ReadCloser {
 
 func (w *WorldData) Tar() *bytes.Buffer {
 	t, err := zipToTar(w.ReadCloser)
+	if err != nil {
+		log.Fatalf("Failed converting world data to tar archive.")
+	}
+
+	return t
+}
+
+func (s *ServerProperties) Zip() *zip.ReadCloser {
+	log.Fatal("(s *ServerProperties) Zip() NOT IMPLEMENTED")
+	return nil
+}
+
+func (s *ServerProperties) Tar() *bytes.Buffer {
+	files := make(map[string]*os.File)
+	files["server.properties"] = s.File
+
+	t, err := toTar(files)
 	if err != nil {
 		log.Fatalf("Failed converting world data to tar archive.")
 	}

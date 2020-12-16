@@ -116,26 +116,9 @@ func LoadServerProperties(containerID, propsPath string) error {
 		return err
 	}
 
-	files := make(map[string]*os.File)
-	files["server.properties"] = propsFile
+	p := ServerProperties{File: propsFile}
 
-	propsTar, err := toTar(files)
-	if err != nil {
-		return err
-	}
-
-	err = newClient().CopyToContainer(
-		context.Background(),
-		containerID,
-		mcDirectory,
-		propsTar,
-		docker.CopyToContainerOptions{},
-	)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return copyToContainer(containerID, mcDirectory, &p)
 }
 
 func copyToContainer(containerID, path string, zt ZipTar) error {
