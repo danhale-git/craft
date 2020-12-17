@@ -25,8 +25,9 @@ const (
 	anyIP       = "0.0.0.0"                      // Refers to any/all IPv4 addresses
 
 	// Directory to save imported world files
-	worldDirectory = "/bedrock/worlds/Bedrock level"
-	mcDirectory    = "/bedrock"
+	worldDirectory           = "/bedrock/worlds/Bedrock level"
+	mcDirectory              = "/bedrock"
+	serverPropertiesFileName = "server.properties"
 
 	// Run the bedrock_server executable and append its output to log.txt
 	runMCCommand = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server" // >> log.txt 2>&1"
@@ -96,37 +97,54 @@ func Run(hostPort int, name string) error {
 	return nil
 }
 
-// CopyWorldToContainer reads a .mcworld zip file and copies the contents to the active world directory for this container.
+// CopyWorldToContainer reads a .mcworld zip file and copies the contents to the active world directory for this
+// container.
 func CopyWorldToContainer(containerID, mcworldPath string) error {
 	// Open a zip archive for reading.
 	r, err := zip.OpenReader(mcworldPath)
 	if err != nil {
 		return err
 	}
-	defer r.Close()
 
-	w := WorldData{ReadCloser: r}
+	w, err := FromZip(r)
+	if err != nil {
+		return err
+	}
 
-	return copyToContainer(containerID, worldDirectory, &w)
+	if err = r.Close(); err != nil {
+		return err
+	}
+
+	return copyToContainer(containerID, worldDirectory, w)
 }
 
 func LoadServerProperties(containerID, propsPath string) error {
 	propsFile, err := os.Open(propsPath)
 	if err != nil {
+		return fmt.Errorf("opening file '%s': %s", propsPath, err)
+	}
+
+	p, err := FromFiles([]*os.File{propsFile})
+	if err != nil {
+		return fmt.Errorf("creating archive: %s", err)
+	}
+
+	p.Files[0].Name = serverPropertiesFileName
+
+	return copyToContainer(containerID, mcDirectory, p)
+}
+
+func copyToContainer(containerID, path string, files *Archive) error {
+	t, err := files.Tar()
+	if err != nil {
 		return err
 	}
 
-	p := ServerProperties{File: propsFile}
-
-	return copyToContainer(containerID, mcDirectory, &p)
-}
-
-func copyToContainer(containerID, path string, zt ZipTar) error {
-	err := newClient().CopyToContainer(
+	err = newClient().CopyToContainer(
 		context.Background(),
 		containerID,
 		path,
-		zt.Tar(),
+		t,
 		docker.CopyToContainerOptions{},
 	)
 	if err != nil {
