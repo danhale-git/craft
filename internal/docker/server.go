@@ -33,6 +33,7 @@ const (
 	runMCCommand = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server" // >> log.txt 2>&1"
 
 	saveHoldDelayMilliseconds = 100
+	saveHoldQueryRetries      = 100
 )
 
 // newClient creates a default docker client.
@@ -99,6 +100,31 @@ func Run(hostPort int, name string) error {
 	return nil
 }
 
+// ContainerFromName returns the container with the given name.
+func ContainerFromName(name string) (c *docker.Container, b bool) {
+	containers, err := newClient().ContainerList(context.Background(), docker.ContainerListOptions{})
+	if err != nil {
+		panic(err)
+	}
+
+	foundCount := 0
+
+	for _, ctr := range containers {
+		if strings.Trim(ctr.Names[0], "/") == name {
+			c = &ctr
+			b = true
+			foundCount++
+		}
+	}
+
+	// This should never happen as docker doesn't allow containers with matching namess
+	if foundCount > 1 {
+		panic(fmt.Sprintf("ERROR: more than 1 docker containers exist with name: %s\n", name))
+	}
+
+	return
+}
+
 // CopyWorldToContainer reads a .mcworld zip file and copies the contents to the active world directory for this
 // container.
 func CopyWorldToContainer(containerID, mcworldPath string) error {
@@ -138,28 +164,8 @@ func CopyServerPropertiesToContainer(containerID, propsPath string) error {
 	return copyToContainer(containerID, mcDirectory, p)
 }
 
-func copyToContainer(containerID, path string, files *Archive) error {
-	t, err := files.Tar()
-	if err != nil {
-		return err
-	}
-
-	err = newClient().CopyToContainer(
-		context.Background(),
-		containerID,
-		path,
-		t,
-		docker.CopyToContainerOptions{},
-	)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// RunMC runs the mc server process on a container.
-func RunMC(containerID string) error {
+// RunServer runs the mc server process on a container.
+func RunServer(containerID string) error {
 	waiter, err := newClient().ContainerAttach(
 		context.Background(),
 		containerID,
@@ -181,6 +187,7 @@ func RunMC(containerID string) error {
 	return nil
 }
 
+// Backup runs the save hold/query/resume command sequence and saves a .mcworld file snapshot to the given local path.
 func Backup(containerID, containerName, destPath string) error {
 	logs := logReader(containerID)
 
@@ -198,8 +205,10 @@ func Backup(containerID, containerName, destPath string) error {
 		return fmt.Errorf("unexpected response to `save hold`: '%s'", sh)
 	}
 
-	// save query
-	for {
+	// Query until ready for backup
+	for i := 0; i < saveHoldQueryRetries; i++ {
+		time.Sleep(saveHoldDelayMilliseconds * time.Millisecond)
+
 		sq, err := commandResponse(containerID, "save query", logs)
 		if err != nil {
 			return err
@@ -207,20 +216,18 @@ func Backup(containerID, containerName, destPath string) error {
 
 		// Ready for backup
 		if strings.HasPrefix(sq, "Data saved. Files are now ready to be copied.") {
-			if err := copyWorldFromContainer(containerID, destPath, containerName); err != nil {
-				return fmt.Errorf("copying world data: %s", err)
+			err = backupWorld(containerID, containerName, destPath)
+			if err != nil {
+				return err
 			}
 
-			// This command returns two lines in response. Read the second one to discard it.
+			// A second line is returned with a list of files, read it to discard it.
 			if _, err := logs.ReadString('\n'); err != nil {
 				return fmt.Errorf("reading 'save query' file list response: %s", err)
 			}
 
 			break
 		}
-
-		// Give the game time to hold.
-		time.Sleep(saveHoldDelayMilliseconds * time.Millisecond)
 	}
 
 	// save resume
@@ -236,28 +243,37 @@ func Backup(containerID, containerName, destPath string) error {
 	return nil
 }
 
-func copyWorldFromContainer(containerID, destPath, containerName string) error {
-	data, _, err := newClient().CopyFromContainer(
-		context.Background(),
-		containerID,
-		worldDirectory,
-	)
+func backupWorld(containerID, containerName, destPath string) error {
+	a, err := copyWorldFromContainer(containerID)
 	if err != nil {
-		return fmt.Errorf("copying world data from server: %s", err)
+		return fmt.Errorf("copying world data from container: %s", err)
 	}
 
-	archive, err := FromTar(data)
-	if err != nil {
-		return fmt.Errorf("reading tar data to file archive: %s", err)
+	// Save the file as <container name>_backup_<date>.mcworld
+	y, m, d := time.Now().Date()
+	fileName := fmt.Sprintf("%s_backup_%d-%d-%d.mcworld", containerName, y, m, d)
+
+	if err = saveToDiskZip(a, destPath, fileName); err != nil {
+		return fmt.Errorf("saving world data to disk: %s", err)
 	}
 
-	// Remove 'Bedrock level' directory.
+	return nil
+}
+
+func copyWorldFromContainer(containerID string) (*Archive, error) {
+	// Copy the world directory and it's contents from the container
+	a, err := copyFromContainer(containerID, worldDirectory)
+	if err != nil {
+		return nil, err
+	}
+
+	// Remove 'Bedrock level' directory
 	files := make([]File, 0)
 
-	for _, f := range archive.Files {
+	for _, f := range a.Files {
 		f.Name = strings.Replace(f.Name, "Bedrock level/", "", 1)
 
-		// Skip the file representing the 'Bedrock level' directory.
+		// Skip the file representing the 'Bedrock level' directory
 		if len(strings.TrimSpace(f.Name)) == 0 {
 			continue
 		}
@@ -265,21 +281,58 @@ func copyWorldFromContainer(containerID, destPath, containerName string) error {
 		files = append(files, f)
 	}
 
-	archive.Files = files
+	a.Files = files
 
-	// Convert backup data from tar to zip and save to disk
-	z, err := archive.Zip()
+	return a, nil
+}
+
+func copyFromContainer(containerID, containerPath string) (*Archive, error) {
+	data, _, err := newClient().CopyFromContainer(
+		context.Background(),
+		containerID,
+		containerPath,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("copying world data from server: %s", err)
+	}
+
+	archive, err := FromTar(data)
+	if err != nil {
+		return nil, fmt.Errorf("reading tar data to file archive: %s", err)
+	}
+
+	return archive, nil
+}
+
+func copyToContainer(containerID, path string, files *Archive) error {
+	t, err := files.Tar()
+	if err != nil {
+		return err
+	}
+
+	err = newClient().CopyToContainer(
+		context.Background(),
+		containerID,
+		path,
+		t,
+		docker.CopyToContainerOptions{},
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func saveToDiskZip(a *Archive, destPath, fileName string) error {
+	z, err := a.Zip()
 	if err != nil {
 		return fmt.Errorf("creating zip data from file archive: %s", err)
 	}
 
-	y, m, d := time.Now().Date()
-	fileName := fmt.Sprintf("%s_backup_%d-%d-%d.mcworld", containerName, y, m, d)
-	p := path.Join(destPath, fileName)
-
-	f, err := os.Create(p)
+	f, err := os.Create(path.Join(destPath, fileName))
 	if err != nil {
-		return fmt.Errorf("creating backup file at '%s': %s", destPath, err)
+		return fmt.Errorf("creating file '%s' at '%s': %s", destPath, fileName, err)
 	}
 
 	_, err = f.Write(z.Bytes())
@@ -287,27 +340,7 @@ func copyWorldFromContainer(containerID, destPath, containerName string) error {
 		return fmt.Errorf("writing zip data bytes: %s", err)
 	}
 
-	return nil
-}
-
-func commandResponse(containerID, cmd string, logs *bufio.Reader) (string, error) {
-	err := command(containerID, cmd)
-	if err != nil {
-		return "", fmt.Errorf("running command `%s`: %s", cmd, err)
-	}
-
-	// Read command echo to discard it
-	if _, err := logs.ReadString('\n'); err != nil {
-		return "", fmt.Errorf("retrieving echo for command `%s`: %s", cmd, err)
-	}
-
-	// Read command response
-	response, err := logs.ReadString('\n')
-	if err != nil {
-		return "", fmt.Errorf("retrieving `%s` response: %s", cmd, err)
-	}
-
-	return response, nil
+	return err
 }
 
 func logReader(containerID string) *bufio.Reader {
@@ -377,31 +410,27 @@ func Command(containerID string, args []string) error {
 
 	return nil
 }
-func command(containerID string, cmd string) error {
-	return Command(containerID, strings.Split(cmd, " "))
+
+func commandResponse(containerID, cmd string, logs *bufio.Reader) (string, error) {
+	err := command(containerID, cmd)
+	if err != nil {
+		return "", fmt.Errorf("running command `%s`: %s", cmd, err)
+	}
+
+	// Read command echo to discard it
+	if _, err := logs.ReadString('\n'); err != nil {
+		return "", fmt.Errorf("retrieving echo for command `%s`: %s", cmd, err)
+	}
+
+	// Read command response
+	response, err := logs.ReadString('\n')
+	if err != nil {
+		return "", fmt.Errorf("retrieving `%s` response: %s", cmd, err)
+	}
+
+	return response, nil
 }
 
-// ContainerFromName returns the container with the given name.
-func ContainerFromName(name string) (c *docker.Container, b bool) {
-	containers, err := newClient().ContainerList(context.Background(), docker.ContainerListOptions{})
-	if err != nil {
-		panic(err)
-	}
-
-	foundCount := 0
-
-	for _, ctr := range containers {
-		if strings.Trim(ctr.Names[0], "/") == name {
-			c = &ctr
-			b = true
-			foundCount++
-		}
-	}
-
-	// This should never happen as docker doesn't allow containers with matching namess
-	if foundCount > 1 {
-		panic(fmt.Sprintf("ERROR: more than 1 docker containers exist with name: %s\n", name))
-	}
-
-	return
+func command(containerID string, cmd string) error {
+	return Command(containerID, strings.Split(cmd, " "))
 }

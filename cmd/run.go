@@ -53,7 +53,7 @@ var runCmd = &cobra.Command{
 		}
 
 		// Run the bedrock_server process
-		err = docker.RunMC(c.ID)
+		err = docker.RunServer(c.ID)
 		if err != nil {
 			return err
 		}
