@@ -31,6 +31,8 @@ const (
 
 	// Run the bedrock_server executable and append its output to log.txt
 	runMCCommand = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server" // >> log.txt 2>&1"
+
+	saveHoldDelayMilliseconds = 100
 )
 
 // newClient creates a default docker client.
@@ -118,7 +120,9 @@ func CopyWorldToContainer(containerID, mcworldPath string) error {
 	return copyToContainer(containerID, worldDirectory, w)
 }
 
-func LoadServerProperties(containerID, propsPath string) error {
+// CopyServerPropertiesToContainer copies the fle at the given path to the mc server directory on the container. The
+// file is always renamed to the value of serverPropertiesFileName (server.properties).
+func CopyServerPropertiesToContainer(containerID, propsPath string) error {
 	propsFile, err := os.Open(propsPath)
 	if err != nil {
 		return fmt.Errorf("opening file '%s': %s", propsPath, err)
@@ -203,32 +207,9 @@ func Backup(containerID, containerName, destPath string) error {
 
 		// Ready for backup
 		if strings.HasPrefix(sq, "Data saved. Files are now ready to be copied.") {
-			// TODO: back up data
-			data, _, err := newClient().CopyFromContainer(
-				context.Background(),
-				containerID,
-				worldDirectory,
-			)
-			if err != nil {
-				return fmt.Errorf("copying world data from server: %s", err)
+			if err := copyWorldFromContainer(containerID, destPath, containerName); err != nil {
+				return fmt.Errorf("copying world data: %s", err)
 			}
-
-			// Convert backup data from tar to zip and save to disk
-			z, err := tarToZip(data)
-			if err != nil {
-				return fmt.Errorf("converting tar to zip: %s", err)
-			}
-
-			y, m, d := time.Now().Date()
-			fileName := fmt.Sprintf("%s_backup_%d-%d-%d.mcworld", containerName, y, m, d)
-			p := path.Join(destPath, fileName)
-
-			f, err := os.Create(p)
-			if err != nil {
-				return fmt.Errorf("creating backup file at '%s': %s", destPath, err)
-			}
-
-			_, err = f.Write(z.Bytes())
 
 			// This command returns two lines in response. Read the second one to discard it.
 			if _, err := logs.ReadString('\n'); err != nil {
@@ -239,7 +220,7 @@ func Backup(containerID, containerName, destPath string) error {
 		}
 
 		// Give the game time to hold.
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(saveHoldDelayMilliseconds * time.Millisecond)
 	}
 
 	// save resume
@@ -250,6 +231,60 @@ func Backup(containerID, containerName, destPath string) error {
 
 	if strings.TrimSpace(sr) != "Changes to the level are resumed." {
 		return fmt.Errorf("unexpected response to `save resume`: '%s'", sr)
+	}
+
+	return nil
+}
+
+func copyWorldFromContainer(containerID, destPath, containerName string) error {
+	data, _, err := newClient().CopyFromContainer(
+		context.Background(),
+		containerID,
+		worldDirectory,
+	)
+	if err != nil {
+		return fmt.Errorf("copying world data from server: %s", err)
+	}
+
+	archive, err := FromTar(data)
+	if err != nil {
+		return fmt.Errorf("reading tar data to file archive: %s", err)
+	}
+
+	// Remove 'Bedrock level' directory.
+	files := make([]File, 0)
+
+	for _, f := range archive.Files {
+		f.Name = strings.Replace(f.Name, "Bedrock level/", "", 1)
+
+		// Skip the file representing the 'Bedrock level' directory.
+		if len(strings.TrimSpace(f.Name)) == 0 {
+			continue
+		}
+
+		files = append(files, f)
+	}
+
+	archive.Files = files
+
+	// Convert backup data from tar to zip and save to disk
+	z, err := archive.Zip()
+	if err != nil {
+		return fmt.Errorf("creating zip data from file archive: %s", err)
+	}
+
+	y, m, d := time.Now().Date()
+	fileName := fmt.Sprintf("%s_backup_%d-%d-%d.mcworld", containerName, y, m, d)
+	p := path.Join(destPath, fileName)
+
+	f, err := os.Create(p)
+	if err != nil {
+		return fmt.Errorf("creating backup file at '%s': %s", destPath, err)
+	}
+
+	_, err = f.Write(z.Bytes())
+	if err != nil {
+		return fmt.Errorf("writing zip data bytes: %s", err)
 	}
 
 	return nil

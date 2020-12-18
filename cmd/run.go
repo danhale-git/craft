@@ -46,7 +46,7 @@ var runCmd = &cobra.Command{
 		// If a world is specified, copy it
 		propsPath, _ := cmd.Flags().GetString("server-properties")
 		if propsPath != "" {
-			err = docker.LoadServerProperties(c.ID, propsPath)
+			err = docker.CopyServerPropertiesToContainer(c.ID, propsPath)
 			if err != nil {
 				return err
 			}

@@ -43,11 +43,13 @@ func FromZip(r *zip.ReadCloser) (*Archive, error) {
 }
 
 // FromTar converts a tar archive reader into a slice of File struct preserving the name and body of the file.
-func FromTar(r *io.Reader) (*Archive, error) {
+func FromTar(r io.ReadCloser) (*Archive, error) {
 	f, err := tarToFiles(r)
 	if err != nil {
 		return nil, err
 	}
+
+	err = r.Close()
 
 	return &Archive{Files: f}, nil
 }
@@ -147,8 +149,8 @@ func zipToFiles(r *zip.ReadCloser) ([]File, error) {
 	return files, nil
 }
 
-func tarToFiles(r *io.Reader) ([]File, error) {
-	tr := tar.NewReader(*r)
+func tarToFiles(r io.ReadCloser) ([]File, error) {
+	tr := tar.NewReader(r)
 
 	files := make([]File, 0)
 
