@@ -165,6 +165,15 @@ func CopyServerPropertiesToContainer(containerID, propsPath string) error {
 	return copyToContainer(containerID, mcDirectory, p)
 }
 
+func CopyServerPropertiesFromContainer(containerID, destPath string) error {
+	a, err := copyFromContainer(containerID, path.Join(mcDirectory, serverPropertiesFileName))
+	if err != nil {
+		return fmt.Errorf("copying '%s' from container path %s: %s", serverPropertiesFileName, mcDirectory, err)
+	}
+
+	return saveToDisk(a, destPath, serverPropertiesFileName)
+}
+
 // RunServer runs the mc server process on a container.
 func RunServer(containerID string) error {
 	waiter, err := newClient().ContainerAttach(
@@ -189,35 +198,34 @@ func RunServer(containerID string) error {
 }
 
 // Backup runs the save hold/query/resume command sequence and saves a .mcworld file snapshot to the given local path.
-func Backup(containerID, containerName, destPath string) error {
-	logs := logReader(containerID)
+func Backup(s *Container, destPath string) error {
+	logs := s.logReader()
 
-	// save hold
-	sh, err := commandResponse(containerID, "save hold", logs)
+	saveHold, err := commandResponse(s.ID, "save hold", logs)
 	if err != nil {
 		return err
 	}
 
-	switch strings.TrimSpace(sh) {
+	switch strings.TrimSpace(saveHold) {
 	case "Saving...":
 	case "The command is already running":
 		break
 	default:
-		return fmt.Errorf("unexpected response to `save hold`: '%s'", sh)
+		return fmt.Errorf("unexpected response to `save hold`: '%s'", saveHold)
 	}
 
 	// Query until ready for backup
 	for i := 0; i < saveHoldQueryRetries; i++ {
 		time.Sleep(saveHoldDelayMilliseconds * time.Millisecond)
 
-		sq, err := commandResponse(containerID, "save query", logs)
+		saveQuery, err := commandResponse(s.ID, "save query", logs)
 		if err != nil {
 			return err
 		}
 
 		// Ready for backup
-		if strings.HasPrefix(sq, "Data saved. Files are now ready to be copied.") {
-			err = backupWorld(containerID, containerName, destPath)
+		if strings.HasPrefix(saveQuery, "Data saved. Files are now ready to be copied.") {
+			err = backupWorld(s.ID, s.name(), destPath)
 			if err != nil {
 				return err
 			}
@@ -232,13 +240,13 @@ func Backup(containerID, containerName, destPath string) error {
 	}
 
 	// save resume
-	sr, err := commandResponse(containerID, "save resume", logs)
+	saveResume, err := commandResponse(s.ID, "save resume", logs)
 	if err != nil {
 		return err
 	}
 
-	if strings.TrimSpace(sr) != "Changes to the level are resumed." {
-		return fmt.Errorf("unexpected response to `save resume`: '%s'", sr)
+	if strings.TrimSpace(saveResume) != "Changes to the level are resumed." {
+		return fmt.Errorf("unexpected response to `save resume`: '%s'", saveResume)
 	}
 
 	return nil
@@ -353,25 +361,6 @@ func saveToDiskZip(a *Archive, destPath, fileName string) error {
 	}
 
 	return err
-}
-
-func logReader(containerID string) *bufio.Reader {
-	logs, err := newClient().ContainerLogs(
-		context.Background(),
-		containerID,
-		docker.ContainerLogsOptions{
-			ShowStdout: true,
-			ShowStderr: true,
-			Tail:       "0",
-			Follow:     true,
-		},
-	)
-
-	if err != nil {
-		log.Fatalf("creating client: %s", err)
-	}
-
-	return bufio.NewReader(logs)
 }
 
 func Tail(containerID string, tail int) *bufio.Reader {

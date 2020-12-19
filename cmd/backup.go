@@ -15,17 +15,14 @@ var backupCmd = &cobra.Command{
 		return cobra.RangeArgs(1, 1)(cmd, args)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, ok := docker.ContainerFromName(args[0])
-		if !ok {
-			return fmt.Errorf("container '%s' does not exist", args[0])
-		}
+		s := docker.GetContainer(args[0])
 
 		out, err := cmd.Flags().GetString("out-dir")
 		if err != nil {
 			return err
 		}
 
-		if err = docker.Backup(c.ID, c.Names[0], out); err != nil {
+		if err = docker.Backup(s, out); err != nil {
 			return fmt.Errorf("backing up world: %s", err)
 		}
 
