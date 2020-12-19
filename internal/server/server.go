@@ -179,45 +179,9 @@ func Backup(c *Container, destPath string) error {
 
 		// Ready for backup
 		if strings.HasPrefix(saveQuery, "Data saved. Files are now ready to be copied.") {
-			y, m, d := time.Now().Date()
-			backupName := fmt.Sprintf("%s_backup_%d-%d-%d", c.name(), y, m, d)
-
-			serverBackup := Archive{}
-
-			worldArchive, err := copyWorldFromContainer(c)
+			err = backupServer(c, destPath, logs)
 			if err != nil {
-				return fmt.Errorf("copying world data from container: %s", err)
-			}
-
-			wz, err := worldArchive.Zip()
-			if err != nil {
-				return err
-			}
-
-			serverBackup.AddFile(File{
-				Name: fmt.Sprintf("%s.mcworld", backupName),
-				Body: wz.Bytes(),
-			})
-
-			serverPropertiesArchive, err := copyServerPropertiesFromContainer(c)
-			if err != nil {
-				return err
-			}
-
-			serverBackup.AddFile(File{
-				Name: serverPropertiesFileName,
-				Body: serverPropertiesArchive.Files[0].Body,
-			})
-
-			//err = serverBackup.Save(path.Join(destPath, fmt.Sprintf("%s.zip", backupName)))
-			err = serverBackup.Save(path.Join(destPath))
-			if err != nil {
-				return fmt.Errorf("saving server backup: %s", err)
-			}
-
-			// A second line is returned with a list of files, read it to discard it.
-			if _, err := logs.ReadString('\n'); err != nil {
-				return fmt.Errorf("reading 'save query' file list response: %s", err)
+				return fmt.Errorf("backing up server: %s", err)
 			}
 
 			break
@@ -237,15 +201,55 @@ func Backup(c *Container, destPath string) error {
 	return nil
 }
 
-/*func backupWorld(c *Container, destPath string) error {
+func backupServer(c *Container, destPath string, logs *bufio.Reader) error {
+	y, m, d := time.Now().Date()
 
+	backupName := fmt.Sprintf("%s_%d-%d-%d_%s",
+		c.name(), y, m, d,
+		strings.Replace(time.Now().Format(time.Kitchen), ":", "-", 1))
 
-	if err = saveToDiskZip(a, destPath, fileName); err != nil {
-		return fmt.Errorf("saving world data to disk: %s", err)
+	serverBackup := Archive{}
+
+	// Back up world
+	worldArchive, err := copyWorldFromContainer(c)
+	if err != nil {
+		return fmt.Errorf("copying world data from container: %s", err)
+	}
+
+	wz, err := worldArchive.Zip()
+	if err != nil {
+		return err
+	}
+
+	serverBackup.AddFile(File{
+		Name: fmt.Sprintf("%s.mcworld", backupName),
+		Body: wz.Bytes(),
+	})
+
+	// Back up settings
+	serverPropertiesArchive, err := copyServerPropertiesFromContainer(c)
+	if err != nil {
+		return err
+	}
+
+	serverBackup.AddFile(File{
+		Name: serverPropertiesFileName,
+		Body: serverPropertiesArchive.Files[0].Body,
+	})
+
+	// Save to disk
+	err = serverBackup.SaveZip(path.Join(destPath, fmt.Sprintf("%s.zip", backupName)))
+	if err != nil {
+		return fmt.Errorf("saving server backup: %s", err)
+	}
+
+	// A second line is returned with a list of files, read it to discard it.
+	if _, err := logs.ReadString('\n'); err != nil {
+		return fmt.Errorf("reading 'save query' file list response: %s", err)
 	}
 
 	return nil
-}*/
+}
 
 func copyWorldFromContainer(c *Container) (*Archive, error) {
 	// Copy the world directory and it's contents from the container
@@ -281,25 +285,6 @@ func copyServerPropertiesFromContainer(c *Container) (*Archive, error) {
 
 	return a, nil
 }
-
-/*func saveToDiskZip(a *Archive, destPath, fileName string) error {
-	z, err := a.Zip()
-	if err != nil {
-		return fmt.Errorf("creating zip data from file archive: %s", err)
-	}
-
-	f, err := os.Create(path.Join(destPath, fileName))
-	if err != nil {
-		return fmt.Errorf("creating file '%s' at '%s': %s", destPath, fileName, err)
-	}
-
-	_, err = f.Write(z.Bytes())
-	if err != nil {
-		return fmt.Errorf("writing zip data bytes: %s", err)
-	}
-
-	return err
-}*/
 
 func Tail(containerID string, tail int) *bufio.Reader {
 	logs, err := dockerClient().ContainerLogs(

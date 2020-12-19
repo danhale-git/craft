@@ -40,7 +40,7 @@ func (a *Archive) Save(outDir string) error {
 	}
 
 	for _, f := range a.Files {
-		err := ioutil.WriteFile(path.Join(outDir, f.Name), f.Body, f.Mode)
+		err := saveFile(path.Join(outDir, f.Name), f.Body)
 		if err != nil {
 			return fmt.Errorf("writing file '%s': %s", f.Name, err)
 		}
@@ -56,9 +56,23 @@ func (a *Archive) SaveZip(savePath string) error {
 		return fmt.Errorf("creating zip archive: %s", err)
 	}
 
-	err = ioutil.WriteFile(savePath, z.Bytes(), 0700)
+	err = saveFile(savePath, z.Bytes())
 	if err != nil {
 		return fmt.Errorf("writing file '%s': %s", savePath, err)
+	}
+
+	return nil
+}
+
+func saveFile(name string, body []byte) error {
+	f, err := os.Create(name)
+	if err != nil {
+		return err
+	}
+
+	_, err = f.Write(body)
+	if err != nil {
+		return err
 	}
 
 	return nil

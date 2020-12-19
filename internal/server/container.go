@@ -59,7 +59,7 @@ func GetContainer(name string) *Container {
 		}
 	}
 
-	// This should never happen as docker doesn't allow containers with matching namess
+	// This should never happen as docker doesn't allow containers with matching names
 	if foundCount > 1 {
 		panic(fmt.Sprintf("ERROR: more than 1 docker containers exist with name: %s\n", name))
 	}
@@ -83,7 +83,7 @@ func (c *Container) name() string {
 		log.Fatalf("Error inspecting container '%s': %s", c.ID, err)
 	}
 
-	return ci.Name
+	return strings.Replace(ci.Name, "/", "", 1)
 }
 
 func (c *Container) copyFrom(containerPath string) (*Archive, error) {
