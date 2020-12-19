@@ -1,8 +1,6 @@
 package cmd
 
 import (
-	"log"
-
 	"github.com/danhale-git/craft/internal/docker"
 
 	"github.com/spf13/cobra"
@@ -29,15 +27,12 @@ var runCmd = &cobra.Command{
 		}
 
 		// Get the container ID
-		c, ok := docker.ContainerFromName(name)
-		if !ok {
-			log.Fatal("container doesn't exist")
-		}
+		c := docker.GetContainerOrExit(name)
 
 		// If a world is specified, copy it
 		worldPath, _ := cmd.Flags().GetString("world")
 		if worldPath != "" {
-			err = docker.CopyWorldToContainer(c.ID, worldPath)
+			err = docker.CopyWorldToContainer(c, worldPath)
 			if err != nil {
 				return err
 			}
@@ -46,7 +41,7 @@ var runCmd = &cobra.Command{
 		// If a world is specified, copy it
 		propsPath, _ := cmd.Flags().GetString("server-properties")
 		if propsPath != "" {
-			err = docker.CopyServerPropertiesToContainer(c.ID, propsPath)
+			err = docker.CopyServerPropertiesToContainer(c, propsPath)
 			if err != nil {
 				return err
 			}

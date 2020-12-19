@@ -101,34 +101,9 @@ func Run(hostPort int, name string) error {
 	return nil
 }
 
-// ContainerFromName returns the container with the given name.
-func ContainerFromName(name string) (c *docker.Container, b bool) {
-	containers, err := newClient().ContainerList(context.Background(), docker.ContainerListOptions{})
-	if err != nil {
-		panic(err)
-	}
-
-	foundCount := 0
-
-	for _, ctr := range containers {
-		if strings.Trim(ctr.Names[0], "/") == name {
-			c = &ctr
-			b = true
-			foundCount++
-		}
-	}
-
-	// This should never happen as docker doesn't allow containers with matching namess
-	if foundCount > 1 {
-		panic(fmt.Sprintf("ERROR: more than 1 docker containers exist with name: %s\n", name))
-	}
-
-	return
-}
-
 // CopyWorldToContainer reads a .mcworld zip file and copies the contents to the active world directory for this
 // container.
-func CopyWorldToContainer(containerID, mcworldPath string) error {
+func CopyWorldToContainer(c *Container, mcworldPath string) error {
 	// Open a zip archive for reading.
 	r, err := zip.OpenReader(mcworldPath)
 	if err != nil {
@@ -144,29 +119,29 @@ func CopyWorldToContainer(containerID, mcworldPath string) error {
 		return err
 	}
 
-	return copyToContainer(containerID, worldDirectory, w)
+	return c.copyTo(worldDirectory, w)
 }
 
 // CopyServerPropertiesToContainer copies the fle at the given path to the mc server directory on the container. The
 // file is always renamed to the value of serverPropertiesFileName (server.properties).
-func CopyServerPropertiesToContainer(containerID, propsPath string) error {
+func CopyServerPropertiesToContainer(c *Container, propsPath string) error {
 	propsFile, err := os.Open(propsPath)
 	if err != nil {
 		return fmt.Errorf("opening file '%s': %s", propsPath, err)
 	}
 
-	p, err := FromFiles([]*os.File{propsFile})
+	a, err := NewArchiveFromFiles([]*os.File{propsFile})
 	if err != nil {
 		return fmt.Errorf("creating archive: %s", err)
 	}
 
-	p.Files[0].Name = serverPropertiesFileName
+	a.Files[0].Name = serverPropertiesFileName
 
-	return copyToContainer(containerID, mcDirectory, p)
+	return c.copyTo(mcDirectory, a)
 }
 
-func CopyServerPropertiesFromContainer(containerID, destPath string) error {
-	a, err := copyFromContainer(containerID, path.Join(mcDirectory, serverPropertiesFileName))
+func CopyServerPropertiesFromContainer(c *Container, destPath string) error {
+	a, err := c.copyFrom(path.Join(mcDirectory, serverPropertiesFileName))
 	if err != nil {
 		return fmt.Errorf("copying '%s' from container path %s: %s", serverPropertiesFileName, mcDirectory, err)
 	}
@@ -198,10 +173,10 @@ func RunServer(containerID string) error {
 }
 
 // Backup runs the save hold/query/resume command sequence and saves a .mcworld file snapshot to the given local path.
-func Backup(s *Container, destPath string) error {
-	logs := s.logReader()
+func Backup(c *Container, destPath string) error {
+	logs := c.logReader()
 
-	saveHold, err := commandResponse(s.ID, "save hold", logs)
+	saveHold, err := commandResponse(c.ID, "save hold", logs)
 	if err != nil {
 		return err
 	}
@@ -218,14 +193,14 @@ func Backup(s *Container, destPath string) error {
 	for i := 0; i < saveHoldQueryRetries; i++ {
 		time.Sleep(saveHoldDelayMilliseconds * time.Millisecond)
 
-		saveQuery, err := commandResponse(s.ID, "save query", logs)
+		saveQuery, err := commandResponse(c.ID, "save query", logs)
 		if err != nil {
 			return err
 		}
 
 		// Ready for backup
 		if strings.HasPrefix(saveQuery, "Data saved. Files are now ready to be copied.") {
-			err = backupWorld(s.ID, s.name(), destPath)
+			err = backupWorld(c, destPath)
 			if err != nil {
 				return err
 			}
@@ -240,7 +215,7 @@ func Backup(s *Container, destPath string) error {
 	}
 
 	// save resume
-	saveResume, err := commandResponse(s.ID, "save resume", logs)
+	saveResume, err := commandResponse(c.ID, "save resume", logs)
 	if err != nil {
 		return err
 	}
@@ -252,15 +227,15 @@ func Backup(s *Container, destPath string) error {
 	return nil
 }
 
-func backupWorld(containerID, containerName, destPath string) error {
-	a, err := copyWorldFromContainer(containerID)
+func backupWorld(c *Container, destPath string) error {
+	a, err := copyWorldFromContainer(c)
 	if err != nil {
 		return fmt.Errorf("copying world data from container: %s", err)
 	}
 
 	// Save the file as <container name>_backup_<date>.mcworld
 	y, m, d := time.Now().Date()
-	fileName := fmt.Sprintf("%s_backup_%d-%d-%d.mcworld", containerName, y, m, d)
+	fileName := fmt.Sprintf("%s_backup_%d-%d-%d.mcworld", c.name(), y, m, d)
 
 	if err = saveToDiskZip(a, destPath, fileName); err != nil {
 		return fmt.Errorf("saving world data to disk: %s", err)
@@ -269,9 +244,9 @@ func backupWorld(containerID, containerName, destPath string) error {
 	return nil
 }
 
-func copyWorldFromContainer(containerID string) (*Archive, error) {
+func copyWorldFromContainer(c *Container) (*Archive, error) {
 	// Copy the world directory and it's contents from the container
-	a, err := copyFromContainer(containerID, worldDirectory)
+	a, err := c.copyFrom(worldDirectory)
 	if err != nil {
 		return nil, err
 	}
@@ -293,44 +268,6 @@ func copyWorldFromContainer(containerID string) (*Archive, error) {
 	a.Files = files
 
 	return a, nil
-}
-
-func copyFromContainer(containerID, containerPath string) (*Archive, error) {
-	data, _, err := newClient().CopyFromContainer(
-		context.Background(),
-		containerID,
-		containerPath,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("copying world data from server: %s", err)
-	}
-
-	archive, err := FromTar(data)
-	if err != nil {
-		return nil, fmt.Errorf("reading tar data to file archive: %s", err)
-	}
-
-	return archive, nil
-}
-
-func copyToContainer(containerID, path string, files *Archive) error {
-	t, err := files.Tar()
-	if err != nil {
-		return err
-	}
-
-	err = newClient().CopyToContainer(
-		context.Background(),
-		containerID,
-		path,
-		t,
-		docker.CopyToContainerOptions{},
-	)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func saveToDisk(a *Archive, destPath, fileName string) error {

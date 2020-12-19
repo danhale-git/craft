@@ -15,7 +15,7 @@ var backupCmd = &cobra.Command{
 		return cobra.RangeArgs(1, 1)(cmd, args)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := docker.GetContainer(args[0])
+		s := docker.GetContainerOrExit(args[0])
 
 		out, err := cmd.Flags().GetString("out-dir")
 		if err != nil {

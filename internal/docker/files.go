@@ -54,8 +54,8 @@ func FromTar(r io.ReadCloser) (*Archive, error) {
 	return &Archive{Files: f}, nil
 }
 
-// FromFiles converts a slice of os.File structs into a slice of File struct preserving the name and body of the file.
-func FromFiles(osFiles []*os.File) (*Archive, error) {
+// NewArchiveFromFiles converts a slice of os.File structs into a slice of File struct preserving the name and body of the file.
+func NewArchiveFromFiles(osFiles []*os.File) (*Archive, error) {
 	files := make([]File, 0)
 
 	for _, of := range osFiles {
