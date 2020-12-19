@@ -1,4 +1,4 @@
-package docker
+package server
 
 import (
 	"archive/zip"
@@ -15,7 +15,6 @@ import (
 
 	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 )
 
@@ -37,21 +36,11 @@ const (
 	saveHoldQueryRetries      = 100
 )
 
-// newClient creates a default docker client.
-func newClient() *client.Client {
-	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		log.Fatalf("Error: Failed to create new docker client: %s", err)
-	}
-
-	return c
-}
-
 // Run is the equivalent of the following docker command
 //
 //    docker run -d -e EULA=TRUE -p <HOST_PORT>:19132/udp <IMAGE_NAME>
 func Run(hostPort int, name string) error {
-	c := newClient()
+	c := dockerClient()
 	ctx := context.Background()
 
 	// Create port binding between host ip:port and container port
@@ -101,9 +90,9 @@ func Run(hostPort int, name string) error {
 	return nil
 }
 
-// CopyWorldToContainer reads a .mcworld zip file and copies the contents to the active world directory for this
+// LoadWorld reads a .mcworld zip file and copies the contents to the active world directory for this
 // container.
-func CopyWorldToContainer(c *Container, mcworldPath string) error {
+func LoadWorld(c *Container, mcworldPath string) error {
 	// Open a zip archive for reading.
 	r, err := zip.OpenReader(mcworldPath)
 	if err != nil {
@@ -122,9 +111,9 @@ func CopyWorldToContainer(c *Container, mcworldPath string) error {
 	return c.copyTo(worldDirectory, w)
 }
 
-// CopyServerPropertiesToContainer copies the fle at the given path to the mc server directory on the container. The
+// LoadServerProperties copies the fle at the given path to the mc server directory on the container. The
 // file is always renamed to the value of serverPropertiesFileName (server.properties).
-func CopyServerPropertiesToContainer(c *Container, propsPath string) error {
+func LoadServerProperties(c *Container, propsPath string) error {
 	propsFile, err := os.Open(propsPath)
 	if err != nil {
 		return fmt.Errorf("opening file '%s': %s", propsPath, err)
@@ -140,20 +129,11 @@ func CopyServerPropertiesToContainer(c *Container, propsPath string) error {
 	return c.copyTo(mcDirectory, a)
 }
 
-func CopyServerPropertiesFromContainer(c *Container, destPath string) error {
-	a, err := c.copyFrom(path.Join(mcDirectory, serverPropertiesFileName))
-	if err != nil {
-		return fmt.Errorf("copying '%s' from container path %s: %s", serverPropertiesFileName, mcDirectory, err)
-	}
-
-	return saveToDisk(a, destPath, serverPropertiesFileName)
-}
-
 // RunServer runs the mc server process on a container.
-func RunServer(containerID string) error {
-	waiter, err := newClient().ContainerAttach(
+func RunServer(c *Container) error {
+	waiter, err := c.ContainerAttach(
 		context.Background(),
-		containerID,
+		c.ID,
 		docker.ContainerAttachOptions{
 			Stdin:  true,
 			Stream: true,
@@ -270,6 +250,15 @@ func copyWorldFromContainer(c *Container) (*Archive, error) {
 	return a, nil
 }
 
+func copyServerPropertiesFromContainer(c *Container, destPath string) error {
+	a, err := c.copyFrom(path.Join(mcDirectory, serverPropertiesFileName))
+	if err != nil {
+		return fmt.Errorf("copying '%s' from container path %s: %s", serverPropertiesFileName, mcDirectory, err)
+	}
+
+	return saveToDisk(a, destPath, serverPropertiesFileName)
+}
+
 func saveToDisk(a *Archive, destPath, fileName string) error {
 	for _, f := range a.Files {
 		err := ioutil.WriteFile(path.Join(destPath, fileName), f.Body, f.Mode)
@@ -301,7 +290,7 @@ func saveToDiskZip(a *Archive, destPath, fileName string) error {
 }
 
 func Tail(containerID string, tail int) *bufio.Reader {
-	logs, err := newClient().ContainerLogs(
+	logs, err := dockerClient().ContainerLogs(
 		context.Background(),
 		containerID,
 		docker.ContainerLogsOptions{
@@ -323,7 +312,7 @@ func Tail(containerID string, tail int) *bufio.Reader {
 func Command(containerID string, args []string) error {
 	// TODO: Log this command
 	// Attach to the container
-	waiter, err := newClient().ContainerAttach(
+	waiter, err := dockerClient().ContainerAttach(
 		context.Background(),
 		containerID,
 		docker.ContainerAttachOptions{

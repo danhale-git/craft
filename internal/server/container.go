@@ -1,4 +1,4 @@
-package docker
+package server
 
 import (
 	"bufio"
@@ -29,9 +29,19 @@ func GetContainerOrExit(name string) *Container {
 	return c
 }
 
+// dockerClient creates a default docker client.
+func dockerClient() *client.Client {
+	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		log.Fatalf("Error: Failed to create new docker client: %s", err)
+	}
+
+	return c
+}
+
 // ContainerFromName returns the container with the given name or nil if that container doesn't exist.
 func GetContainer(name string) *Container {
-	cl := newClient()
+	cl := dockerClient()
 
 	containers, err := cl.ContainerList(context.Background(), docker.ContainerListOptions{})
 	if err != nil {
@@ -77,7 +87,7 @@ func (c *Container) name() string {
 }
 
 func (c *Container) copyFrom(containerPath string) (*Archive, error) {
-	data, _, err := newClient().CopyFromContainer(
+	data, _, err := dockerClient().CopyFromContainer(
 		context.Background(),
 		c.ID,
 		containerPath,
@@ -100,7 +110,7 @@ func (c *Container) copyTo(path string, files *Archive) error {
 		return err
 	}
 
-	err = newClient().CopyToContainer(
+	err = dockerClient().CopyToContainer(
 		context.Background(),
 		c.ID,
 		path,
