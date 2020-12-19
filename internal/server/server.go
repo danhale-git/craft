@@ -185,6 +185,11 @@ func Backup(c *Container, destPath string) error {
 				return err
 			}
 
+			err = backupServerProperties(c, destPath)
+			if err != nil {
+				return err
+			}
+
 			// A second line is returned with a list of files, read it to discard it.
 			if _, err := logs.ReadString('\n'); err != nil {
 				return fmt.Errorf("reading 'save query' file list response: %s", err)
@@ -224,6 +229,15 @@ func backupWorld(c *Container, destPath string) error {
 	return nil
 }
 
+func backupServerProperties(c *Container, destPath string) error {
+	a, err := copyServerPropertiesFromContainer(c)
+	if err != nil {
+		return err
+	}
+
+	return saveToDisk(a, destPath, serverPropertiesFileName)
+}
+
 func copyWorldFromContainer(c *Container) (*Archive, error) {
 	// Copy the world directory and it's contents from the container
 	a, err := c.copyFrom(worldDirectory)
@@ -250,13 +264,13 @@ func copyWorldFromContainer(c *Container) (*Archive, error) {
 	return a, nil
 }
 
-func copyServerPropertiesFromContainer(c *Container, destPath string) error {
+func copyServerPropertiesFromContainer(c *Container) (*Archive, error) {
 	a, err := c.copyFrom(path.Join(mcDirectory, serverPropertiesFileName))
 	if err != nil {
-		return fmt.Errorf("copying '%s' from container path %s: %s", serverPropertiesFileName, mcDirectory, err)
+		return nil, fmt.Errorf("copying '%s' from container path %s: %s", serverPropertiesFileName, mcDirectory, err)
 	}
 
-	return saveToDisk(a, destPath, serverPropertiesFileName)
+	return a, nil
 }
 
 func saveToDisk(a *Archive, destPath, fileName string) error {
