@@ -96,7 +96,7 @@ func (c *Container) copyFrom(containerPath string) (*Archive, error) {
 		return nil, fmt.Errorf("copying data from server at '%s': %s", containerPath, err)
 	}
 
-	archive, err := FromTar(data)
+	archive, err := NewArchiveFromTar(data)
 	if err != nil {
 		return nil, fmt.Errorf("reading tar data from '%s' to file archive: %s", containerPath, err)
 	}
@@ -104,21 +104,21 @@ func (c *Container) copyFrom(containerPath string) (*Archive, error) {
 	return archive, nil
 }
 
-func (c *Container) copyTo(path string, files *Archive) error {
+func (c *Container) copyTo(destPath string, files *Archive) error {
 	t, err := files.Tar()
 	if err != nil {
-		return err
+		return fmt.Errorf("creating tar archive: %s", err)
 	}
 
 	err = dockerClient().CopyToContainer(
 		context.Background(),
 		c.ID,
-		path,
+		destPath,
 		t,
 		docker.CopyToContainerOptions{},
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("copying files to '%s': %s", destPath, err)
 	}
 
 	return nil

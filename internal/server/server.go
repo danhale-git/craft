@@ -3,8 +3,10 @@ package server
 import (
 	"archive/zip"
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -89,6 +91,74 @@ func Run(hostPort int, name string) error {
 	return nil
 }
 
+func LoadBackup(c *Container, backupPath string) error {
+	// Open a zip archive for reading.
+	z, err := zip.OpenReader(backupPath)
+	if err != nil {
+		return err
+	}
+
+	defer z.Close()
+
+	foundWorld := false
+
+	for _, file := range z.File {
+		if strings.HasSuffix(file.Name, ".mcworld") {
+			foundWorld = true
+
+			f, err := file.Open()
+			if err != nil {
+				return err
+			}
+
+			b, err := ioutil.ReadAll(f)
+			if err != nil {
+				return err
+			}
+
+			z, err := zip.NewReader(bytes.NewReader(b), int64(len(b)))
+			if err != nil {
+				return err
+			}
+
+			w, err := NewArchiveFromZip(z)
+			if err != nil {
+				return err
+			}
+
+			err = c.copyTo(worldDirectory, w)
+			if err != nil {
+				return err
+			}
+		} else {
+			a := Archive{}
+
+			f, err := file.Open()
+			if err != nil {
+				return err
+			}
+
+			b, err := ioutil.ReadAll(f)
+			if err != nil {
+				return err
+			}
+
+			a.AddFile(File{
+				Name: file.Name,
+				Body: b,
+			})
+
+			return c.copyTo(mcDirectory, &a)
+		}
+	}
+
+	if !foundWorld {
+		return fmt.Errorf("no .mcworld file present in backup")
+	}
+
+	return nil
+}
+
 // LoadWorld reads a .mcworld zip file and copies the contents to the active world directory for this
 // container.
 func LoadWorld(c *Container, mcworldPath string) error {
@@ -98,7 +168,7 @@ func LoadWorld(c *Container, mcworldPath string) error {
 		return err
 	}
 
-	w, err := FromZip(r)
+	w, err := NewArchiveFromZip(&r.Reader)
 	if err != nil {
 		return err
 	}

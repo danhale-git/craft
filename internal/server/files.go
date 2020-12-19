@@ -88,8 +88,8 @@ func (a *Archive) Tar() (*bytes.Buffer, error) {
 	return filesToTar(a.Files)
 }
 
-// FromZip converts a zip archive reader into a slice of File struct preserving the name and body of the file.
-func FromZip(r *zip.ReadCloser) (*Archive, error) {
+// NewArchiveFromZip converts a zip archive reader into a slice of File struct preserving the name and body of the file.
+func NewArchiveFromZip(r *zip.Reader) (*Archive, error) {
 	f, err := zipToFiles(r)
 	if err != nil {
 		return nil, err
@@ -98,8 +98,8 @@ func FromZip(r *zip.ReadCloser) (*Archive, error) {
 	return &Archive{Files: f}, nil
 }
 
-// FromTar converts a tar archive reader into a slice of File struct preserving the name and body of the file.
-func FromTar(r io.ReadCloser) (*Archive, error) {
+// NewArchiveFromTar converts a tar archive reader into a slice of File struct preserving the name and body of the file.
+func NewArchiveFromTar(r io.ReadCloser) (*Archive, error) {
 	f, err := tarToFiles(r)
 	if err != nil {
 		return nil, err
@@ -178,7 +178,7 @@ func filesToTar(files []File) (*bytes.Buffer, error) {
 	return buf, nil
 }
 
-func zipToFiles(r *zip.ReadCloser) ([]File, error) {
+func zipToFiles(r *zip.Reader) ([]File, error) {
 	files := make([]File, 0)
 
 	for _, f := range r.File {

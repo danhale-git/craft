@@ -29,21 +29,32 @@ var runCmd = &cobra.Command{
 		// Get the container ID
 		c := server.GetContainerOrExit(name)
 
+		// TODO: Warn the user when --backup is given alongside --world or --server-properties
 		// If a world is specified, copy it
-		worldPath, _ := cmd.Flags().GetString("world")
-		if worldPath != "" {
-			err = server.LoadWorld(c, worldPath)
+		backupPath, _ := cmd.Flags().GetString("backup")
+		if backupPath != "" {
+			err = server.LoadBackup(c, backupPath)
 			if err != nil {
 				return err
 			}
-		}
 
-		// If a world is specified, copy it
-		propsPath, _ := cmd.Flags().GetString("server-properties")
-		if propsPath != "" {
-			err = server.LoadServerProperties(c, propsPath)
-			if err != nil {
-				return err
+		} else {
+			// If a world is specified, copy it
+			worldPath, _ := cmd.Flags().GetString("world")
+			if worldPath != "" {
+				err = server.LoadWorld(c, worldPath)
+				if err != nil {
+					return err
+				}
+			}
+
+			// If a world is specified, copy it
+			propsPath, _ := cmd.Flags().GetString("server-properties")
+			if propsPath != "" {
+				err = server.LoadServerProperties(c, propsPath)
+				if err != nil {
+					return err
+				}
 			}
 		}
 
@@ -61,6 +72,7 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 
 	runCmd.Flags().String("world", "", "Path to a .mcworld file to be loaded.")
+	runCmd.Flags().String("backup", "", "Path to a .zip server backup.")
 	runCmd.Flags().String("server-properties", "", "Path to a server.properties file to be loaded.")
 
 	// TODO: automatically chose an unused port if not given instead of using default port
