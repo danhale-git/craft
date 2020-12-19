@@ -8,10 +8,12 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path"
 )
 
 // Archive is a collection of file names and contents
 type Archive struct {
+	// TODO: make files private?
 	Files []File
 }
 
@@ -20,6 +22,46 @@ type File struct {
 	Name string
 	Mode os.FileMode
 	Body []byte
+}
+
+func (a *Archive) AddFile(f File) {
+	a.Files = append(a.Files, f)
+}
+
+// Save writes the file to disk at the specified path
+func (a *Archive) Save(outDir string) error {
+	fileInfo, err := os.Stat(outDir)
+	if err != nil {
+		return fmt.Errorf("getting file info for '%s': %s", outDir, err)
+	}
+
+	if !fileInfo.IsDir() {
+		return fmt.Errorf("parameter must be a directory, got %s", outDir)
+	}
+
+	for _, f := range a.Files {
+		err := ioutil.WriteFile(path.Join(outDir, f.Name), f.Body, f.Mode)
+		if err != nil {
+			return fmt.Errorf("writing file '%s': %s", f.Name, err)
+		}
+	}
+
+	return nil
+}
+
+// Save writes the file to disk at the specified path
+func (a *Archive) SaveZip(savePath string) error {
+	z, err := a.Zip()
+	if err != nil {
+		return fmt.Errorf("creating zip archive: %s", err)
+	}
+
+	err = ioutil.WriteFile(savePath, z.Bytes(), 0700)
+	if err != nil {
+		return fmt.Errorf("writing file '%s': %s", savePath, err)
+	}
+
+	return nil
 }
 
 // Zip returns a zip archive
@@ -54,7 +96,7 @@ func FromTar(r io.ReadCloser) (*Archive, error) {
 	return &Archive{Files: f}, nil
 }
 
-// NewArchiveFromFiles converts a slice of os.File structs into a slice of File struct preserving the name and body of the file.
+// NewArchiveFromFiles converts a slice of os.File structs into an Archive.
 func NewArchiveFromFiles(osFiles []*os.File) (*Archive, error) {
 	files := make([]File, 0)
 

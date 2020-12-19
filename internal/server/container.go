@@ -93,12 +93,12 @@ func (c *Container) copyFrom(containerPath string) (*Archive, error) {
 		containerPath,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("copying world data from server: %s", err)
+		return nil, fmt.Errorf("copying data from server at '%s': %s", containerPath, err)
 	}
 
 	archive, err := FromTar(data)
 	if err != nil {
-		return nil, fmt.Errorf("reading tar data to file archive: %s", err)
+		return nil, fmt.Errorf("reading tar data from '%s' to file archive: %s", containerPath, err)
 	}
 
 	return archive, nil

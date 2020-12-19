@@ -5,7 +5,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 	"path"
@@ -180,14 +179,40 @@ func Backup(c *Container, destPath string) error {
 
 		// Ready for backup
 		if strings.HasPrefix(saveQuery, "Data saved. Files are now ready to be copied.") {
-			err = backupWorld(c, destPath)
+			y, m, d := time.Now().Date()
+			backupName := fmt.Sprintf("%s_backup_%d-%d-%d", c.name(), y, m, d)
+
+			serverBackup := Archive{}
+
+			worldArchive, err := copyWorldFromContainer(c)
+			if err != nil {
+				return fmt.Errorf("copying world data from container: %s", err)
+			}
+
+			wz, err := worldArchive.Zip()
 			if err != nil {
 				return err
 			}
 
-			err = backupServerProperties(c, destPath)
+			serverBackup.AddFile(File{
+				Name: fmt.Sprintf("%s.mcworld", backupName),
+				Body: wz.Bytes(),
+			})
+
+			serverPropertiesArchive, err := copyServerPropertiesFromContainer(c)
 			if err != nil {
 				return err
+			}
+
+			serverBackup.AddFile(File{
+				Name: serverPropertiesFileName,
+				Body: serverPropertiesArchive.Files[0].Body,
+			})
+
+			//err = serverBackup.Save(path.Join(destPath, fmt.Sprintf("%s.zip", backupName)))
+			err = serverBackup.Save(path.Join(destPath))
+			if err != nil {
+				return fmt.Errorf("saving server backup: %s", err)
 			}
 
 			// A second line is returned with a list of files, read it to discard it.
@@ -212,31 +237,15 @@ func Backup(c *Container, destPath string) error {
 	return nil
 }
 
-func backupWorld(c *Container, destPath string) error {
-	a, err := copyWorldFromContainer(c)
-	if err != nil {
-		return fmt.Errorf("copying world data from container: %s", err)
-	}
+/*func backupWorld(c *Container, destPath string) error {
 
-	// Save the file as <container name>_backup_<date>.mcworld
-	y, m, d := time.Now().Date()
-	fileName := fmt.Sprintf("%s_backup_%d-%d-%d.mcworld", c.name(), y, m, d)
 
 	if err = saveToDiskZip(a, destPath, fileName); err != nil {
 		return fmt.Errorf("saving world data to disk: %s", err)
 	}
 
 	return nil
-}
-
-func backupServerProperties(c *Container, destPath string) error {
-	a, err := copyServerPropertiesFromContainer(c)
-	if err != nil {
-		return err
-	}
-
-	return saveToDisk(a, destPath, serverPropertiesFileName)
-}
+}*/
 
 func copyWorldFromContainer(c *Container) (*Archive, error) {
 	// Copy the world directory and it's contents from the container
@@ -273,18 +282,7 @@ func copyServerPropertiesFromContainer(c *Container) (*Archive, error) {
 	return a, nil
 }
 
-func saveToDisk(a *Archive, destPath, fileName string) error {
-	for _, f := range a.Files {
-		err := ioutil.WriteFile(path.Join(destPath, fileName), f.Body, f.Mode)
-		if err != nil {
-			return fmt.Errorf("writing file '%s': %s", f.Name, err)
-		}
-	}
-
-	return nil
-}
-
-func saveToDiskZip(a *Archive, destPath, fileName string) error {
+/*func saveToDiskZip(a *Archive, destPath, fileName string) error {
 	z, err := a.Zip()
 	if err != nil {
 		return fmt.Errorf("creating zip data from file archive: %s", err)
@@ -301,7 +299,7 @@ func saveToDiskZip(a *Archive, destPath, fileName string) error {
 	}
 
 	return err
-}
+}*/
 
 func Tail(containerID string, tail int) *bufio.Reader {
 	logs, err := dockerClient().ContainerLogs(
