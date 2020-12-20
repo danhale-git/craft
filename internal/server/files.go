@@ -13,7 +13,6 @@ import (
 
 // Archive is a collection of file names and contents
 type Archive struct {
-	// TODO: make files private?
 	Files []File
 }
 
@@ -40,7 +39,7 @@ func (a *Archive) Save(outDir string) error {
 	}
 
 	for _, f := range a.Files {
-		err := saveFile(path.Join(outDir, f.Name), f.Body)
+		err := saveFile(outDir, f.Name, f.Body)
 		if err != nil {
 			return fmt.Errorf("writing file '%s': %s", f.Name, err)
 		}
@@ -50,22 +49,29 @@ func (a *Archive) Save(outDir string) error {
 }
 
 // Save writes the file to disk at the specified path
-func (a *Archive) SaveZip(savePath string) error {
+func (a *Archive) SaveZip(dirPath, fileName string) error {
 	z, err := a.Zip()
 	if err != nil {
 		return fmt.Errorf("creating zip archive: %s", err)
 	}
 
-	err = saveFile(savePath, z.Bytes())
+	err = saveFile(dirPath, fileName, z.Bytes())
 	if err != nil {
-		return fmt.Errorf("writing file '%s': %s", savePath, err)
+		return fmt.Errorf("writing file '%s': %s", path.Join(dirPath, fileName), err)
 	}
 
 	return nil
 }
 
-func saveFile(name string, body []byte) error {
-	f, err := os.Create(name)
+func saveFile(dirPath, fileName string, body []byte) error {
+	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+		err = os.MkdirAll(dirPath, 755)
+		if err != nil {
+			return err
+		}
+	}
+
+	f, err := os.Create(path.Join(dirPath, fileName))
 	if err != nil {
 		return err
 	}

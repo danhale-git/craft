@@ -16,7 +16,7 @@ var backupCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		s := server.GetContainerOrExit(args[0])
 
-		out, err := cmd.Flags().GetString("out-dir")
+		out, err := rootCmd.PersistentFlags().GetString("backup-dir")
 		if err != nil {
 			return err
 		}
@@ -31,7 +31,4 @@ var backupCmd = &cobra.Command{
 
 func init() {
 	rootCmd.AddCommand(backupCmd)
-
-	backupCmd.Flags().StringP("out-dir", "o", "", "The directory where this backup will be saved as a .mcworld file.")
-	_ = backupCmd.MarkFlagRequired("out-dir")
 }

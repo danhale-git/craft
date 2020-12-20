@@ -18,22 +18,22 @@ type Container struct {
 	ID string
 }
 
+// dockerClient creates a default docker client.
+func dockerClient() *client.Client {
+	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		log.Fatalf("Error: Failed to create new docker client: %s", err)
+	}
+
+	return c
+}
+
 // ContainerFromName returns the container with the given name or exits with an error if that container doesn't exist.
 func GetContainerOrExit(name string) *Container {
 	c := GetContainer(name)
 	if c == nil {
 		fmt.Printf("Container with name '%s' does not exist.\n", name)
 		os.Exit(0)
-	}
-
-	return c
-}
-
-// dockerClient creates a default docker client.
-func dockerClient() *client.Client {
-	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		log.Fatalf("Error: Failed to create new docker client: %s", err)
 	}
 
 	return c

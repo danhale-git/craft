@@ -18,11 +18,16 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path"
+
+	"github.com/mitchellh/go-homedir"
 
 	"github.com/spf13/cobra"
 )
 
-//var cfgFile string
+const (
+	backupDirectoryName = "craft_backups"
+)
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
@@ -45,13 +50,16 @@ func init() {
 // initConfig reads in config file and ENV variables if set.
 func initConfig() {
 	// Find home directory.
-	/*home, err := homedir.Dir()
+	home, err := homedir.Dir()
 	if err != nil {
 		fmt.Println(err)
 		os.Exit(1)
 	}
 
-	// Search config in home directory with name ".craft" (without extension).
+	rootCmd.PersistentFlags().StringP("backup-dir", "o", path.Join(home, backupDirectoryName),
+		"The directory where backup files are stored.")
+
+	/*// Search config in home directory with name ".craft" (without extension).
 	viper.AddConfigPath(home)
 	viper.SetConfigName(".craft")
 

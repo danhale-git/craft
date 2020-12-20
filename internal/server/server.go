@@ -91,6 +91,7 @@ func Run(hostPort int, name string) error {
 	return nil
 }
 
+// LoadBackup reads the file at backupPath as a zip archive. The archive must contain a valid .mcworld file.
 func LoadBackup(c *Container, backupPath string) error {
 	// Open a zip archive for reading.
 	z, err := zip.OpenReader(backupPath)
@@ -103,18 +104,19 @@ func LoadBackup(c *Container, backupPath string) error {
 	foundWorld := false
 
 	for _, file := range z.File {
+		f, err := file.Open()
+		if err != nil {
+			return err
+		}
+
+		b, err := ioutil.ReadAll(f)
+		if err != nil {
+			return err
+		}
+
 		if strings.HasSuffix(file.Name, ".mcworld") {
+			// World file is copied to the 'Bedrock level' directory
 			foundWorld = true
-
-			f, err := file.Open()
-			if err != nil {
-				return err
-			}
-
-			b, err := ioutil.ReadAll(f)
-			if err != nil {
-				return err
-			}
 
 			z, err := zip.NewReader(bytes.NewReader(b), int64(len(b)))
 			if err != nil {
@@ -131,17 +133,8 @@ func LoadBackup(c *Container, backupPath string) error {
 				return err
 			}
 		} else {
+			// Other files are copied to the directory containing the mc server executable
 			a := Archive{}
-
-			f, err := file.Open()
-			if err != nil {
-				return err
-			}
-
-			b, err := ioutil.ReadAll(f)
-			if err != nil {
-				return err
-			}
 
 			a.AddFile(File{
 				Name: file.Name,
@@ -308,7 +301,7 @@ func backupServer(c *Container, destPath string, logs *bufio.Reader) error {
 	})
 
 	// Save to disk
-	err = serverBackup.SaveZip(path.Join(destPath, fmt.Sprintf("%s.zip", backupName)))
+	err = serverBackup.SaveZip(path.Join(destPath, c.name()), fmt.Sprintf("%s.zip", backupName))
 	if err != nil {
 		return fmt.Errorf("saving server backup: %s", err)
 	}
