@@ -14,19 +14,24 @@ var backupCmd = &cobra.Command{
 		return cobra.RangeArgs(1, 1)(cmd, args)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s := server.GetContainerOrExit(args[0])
-
-		out, err := rootCmd.PersistentFlags().GetString("backup-dir")
-		if err != nil {
-			return err
-		}
-
-		if err = server.Backup(s, out); err != nil {
-			return fmt.Errorf("backing up world: %s", err)
-		}
-
-		return nil
+		c := server.GetContainerOrExit(args[0])
+		return RunBackup(c)
 	},
+}
+
+func RunBackup(c *server.Container) error {
+	out, err := rootCmd.PersistentFlags().GetString("backup-dir")
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("Backing up to %s\n", out)
+
+	if err = server.Backup(c, out); err != nil {
+		return fmt.Errorf("backing up world: %s", err)
+	}
+
+	return nil
 }
 
 func init() {

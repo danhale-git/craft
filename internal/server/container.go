@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/danhale-git/craft/internal/files"
 
@@ -108,7 +109,7 @@ func (c *Container) Command(args []string) error {
 
 // Tail returns a buffer with the stdout and stderr from the running mc server process. New output will continually
 // be sent to the buffer after creation.
-func Tail(c *Container, tail int) *bufio.Reader {
+func (c *Container) Tail(tail int) *bufio.Reader {
 	logs, err := dockerClient().ContainerLogs(
 		context.Background(),
 		c.ID,
@@ -125,6 +126,17 @@ func Tail(c *Container, tail int) *bufio.Reader {
 	}
 
 	return bufio.NewReader(logs)
+}
+
+// Stop stops the docker container.
+func (c *Container) Stop() error {
+	timeout := time.Duration(10)
+
+	return c.ContainerStop(
+		context.Background(),
+		c.ID,
+		&timeout,
+	)
 }
 
 func (c *Container) name() string {

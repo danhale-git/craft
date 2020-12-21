@@ -36,6 +36,8 @@ const (
 
 	saveHoldDelayMilliseconds = 100
 	saveHoldQueryRetries      = 100
+
+	backupFilenameTimeLayout = "02-01-2006_15-04"
 )
 
 // Run is the equivalent of the following docker command
@@ -266,11 +268,10 @@ func Backup(c *Container, destPath string) error {
 }
 
 func backupServer(c *Container, destPath string, logs *bufio.Reader) error {
-	y, m, d := time.Now().Date()
-
-	backupName := fmt.Sprintf("%s_%d-%d-%d_%s",
-		c.name(), y, m, d,
-		strings.Replace(time.Now().Format(time.Kitchen), ":", "-", 1))
+	backupName := fmt.Sprintf("%s_%s",
+		c.name(),
+		time.Now().Format(backupFilenameTimeLayout),
+	)
 
 	serverBackup := files.Archive{}
 
