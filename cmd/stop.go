@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/danhale-git/craft/internal/server"
+	"github.com/danhale-git/craft/internal/craft"
 
 	"github.com/spf13/cobra"
 )
@@ -16,7 +16,7 @@ var stopCmd = &cobra.Command{
 		return cobra.RangeArgs(1, 1)(cmd, args)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c := server.GetContainerOrExit(args[0])
+		c := craft.GetContainerOrExit(args[0])
 
 		noBackup, err := cmd.Flags().GetBool("no-backup")
 		if err != nil {

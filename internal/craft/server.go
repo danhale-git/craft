@@ -1,4 +1,4 @@
-package server
+package craft
 
 import (
 	"archive/zip"

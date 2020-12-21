@@ -4,7 +4,7 @@ import (
 	"log"
 	"path"
 
-	"github.com/danhale-git/craft/internal/server"
+	"github.com/danhale-git/craft/internal/craft"
 
 	"github.com/spf13/cobra"
 )
@@ -24,7 +24,7 @@ var startCmd = &cobra.Command{
 			return err
 		}
 
-		mostRecentBackup, err := server.LatestServerBackup(name, backupDir)
+		mostRecentBackup, err := craft.LatestServerBackup(name, backupDir)
 		if err != nil {
 			log.Fatalf("getting most recent backup file name: %s", err)
 		}
@@ -35,21 +35,21 @@ var startCmd = &cobra.Command{
 			return err
 		}
 
-		err = server.Run(port, name)
+		err = craft.Run(port, name)
 		if err != nil {
 			log.Fatalf("Error running server: %s", err)
 		}
 
 		// Get the container ID
-		c := server.GetContainerOrExit(name)
+		c := craft.GetContainerOrExit(name)
 
-		err = server.LoadBackup(c, path.Join(backupDir, name, mostRecentBackup))
+		err = craft.LoadBackup(c, path.Join(backupDir, name, mostRecentBackup))
 		if err != nil {
 			log.Fatalf("loading backup file to server: %s", err)
 		}
 
 		// Run the bedrock_server process
-		err = server.RunServer(c)
+		err = craft.RunServer(c)
 		if err != nil {
 			return err
 		}

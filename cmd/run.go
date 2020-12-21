@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/danhale-git/craft/internal/server"
+	"github.com/danhale-git/craft/internal/craft"
 
 	"github.com/spf13/cobra"
 )
@@ -21,19 +21,19 @@ var runCmd = &cobra.Command{
 			return err
 		}
 
-		err = server.Run(port, name)
+		err = craft.Run(port, name)
 		if err != nil {
 			return err
 		}
 
 		// Get the container ID
-		c := server.GetContainerOrExit(name)
+		c := craft.GetContainerOrExit(name)
 
 		// TODO: Warn the user when --backup is given alongside --world or --server-properties
 		// If a world is specified, copy it
 		backupPath, _ := cmd.Flags().GetString("backup")
 		if backupPath != "" {
-			err = server.LoadBackup(c, backupPath)
+			err = craft.LoadBackup(c, backupPath)
 			if err != nil {
 				return err
 			}
@@ -42,7 +42,7 @@ var runCmd = &cobra.Command{
 			// If a world is specified, copy it
 			worldPath, _ := cmd.Flags().GetString("world")
 			if worldPath != "" {
-				err = server.LoadWorld(c, worldPath)
+				err = craft.LoadWorld(c, worldPath)
 				if err != nil {
 					return err
 				}
@@ -51,7 +51,7 @@ var runCmd = &cobra.Command{
 			// If a world is specified, copy it
 			propsPath, _ := cmd.Flags().GetString("server-properties")
 			if propsPath != "" {
-				err = server.LoadServerProperties(c, propsPath)
+				err = craft.LoadServerProperties(c, propsPath)
 				if err != nil {
 					return err
 				}
@@ -59,7 +59,7 @@ var runCmd = &cobra.Command{
 		}
 
 		// Run the bedrock_server process
-		err = server.RunServer(c)
+		err = craft.RunServer(c)
 		if err != nil {
 			return err
 		}

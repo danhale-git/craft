@@ -1,7 +1,7 @@
 package cmd
 
 import (
-	"github.com/danhale-git/craft/internal/server"
+	"github.com/danhale-git/craft/internal/craft"
 	"github.com/spf13/cobra"
 )
 
@@ -15,7 +15,7 @@ var cmdCmd = &cobra.Command{
 		containerName := args[0]
 		command := args[1:]
 
-		c := server.GetContainerOrExit(containerName)
+		c := craft.GetContainerOrExit(containerName)
 
 		err := c.Command(command)
 		if err != nil {
