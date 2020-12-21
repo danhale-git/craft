@@ -32,6 +32,24 @@ func dockerClient() *client.Client {
 	return c
 }
 
+// ListNames returns the name of all containers as a slice of strings.
+func ListNames() ([]string, error) {
+	containers, err := dockerClient().ContainerList(
+		context.Background(),
+		docker.ContainerListOptions{},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("listing docker containers: %s", err)
+	}
+
+	names := make([]string, len(containers))
+	for i, c := range containers {
+		names[i] = strings.Replace(c.Names[0], "/", "", 1)
+	}
+
+	return names, nil
+}
+
 // ContainerFromName returns the container with the given name or exits with an error if that container doesn't exist.
 func GetContainerOrExit(name string) *Container {
 	c := GetContainer(name)

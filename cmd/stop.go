@@ -12,6 +12,9 @@ import (
 // stopCmd represents the stop command
 var stopCmd = &cobra.Command{
 	Use: "stop",
+	Args: func(cmd *cobra.Command, args []string) error {
+		return cobra.RangeArgs(1, 1)(cmd, args)
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c := server.GetContainerOrExit(args[0])
 
