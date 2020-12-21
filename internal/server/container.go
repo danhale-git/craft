@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/danhale-git/craft/internal/files"
@@ -76,6 +77,56 @@ func GetContainer(name string) *Container {
 	}
 }
 
+// Command runs the given arguments separated by spaces as a command in the bedrock_server process cli.
+func (c *Container) Command(args []string) error {
+	// Attach to the container
+	waiter, err := c.ContainerAttach(
+		context.Background(),
+		c.ID,
+		docker.ContainerAttachOptions{
+			Stdin:  true,
+			Stream: true,
+		},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	commandString := strings.Join(args, " ") + "\n"
+
+	// Write the command to the bedrock_server process cli
+	_, err = waiter.Conn.Write([]byte(
+		commandString,
+	))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Tail returns a buffer with the stdout and stderr from the running mc server process. New output will continually
+// be sent to the buffer after creation.
+func Tail(c *Container, tail int) *bufio.Reader {
+	logs, err := dockerClient().ContainerLogs(
+		context.Background(),
+		c.ID,
+		docker.ContainerLogsOptions{
+			ShowStdout: true,
+			ShowStderr: true,
+			Tail:       strconv.Itoa(tail),
+			Follow:     true,
+		},
+	)
+
+	if err != nil {
+		log.Fatalf("getting container logs: %s", err)
+	}
+
+	return bufio.NewReader(logs)
+}
+
 func (c *Container) name() string {
 	ci, err := c.ContainerInspect(
 		context.Background(),
@@ -89,7 +140,7 @@ func (c *Container) name() string {
 }
 
 func (c *Container) copyFrom(containerPath string) (*files.Archive, error) {
-	data, _, err := dockerClient().CopyFromContainer(
+	data, _, err := c.CopyFromContainer(
 		context.Background(),
 		c.ID,
 		containerPath,
@@ -112,7 +163,7 @@ func (c *Container) copyTo(destPath string, files *files.Archive) error {
 		return fmt.Errorf("creating tar archive: %s", err)
 	}
 
-	err = dockerClient().CopyToContainer(
+	err = c.CopyToContainer(
 		context.Background(),
 		c.ID,
 		destPath,

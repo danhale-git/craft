@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"path"
 	"strconv"
@@ -220,7 +219,7 @@ func RunServer(c *Container) error {
 func Backup(c *Container, destPath string) error {
 	logs := c.logReader()
 
-	saveHold, err := commandResponse(c.ID, "save hold", logs)
+	saveHold, err := commandResponse(c, "save hold", logs)
 	if err != nil {
 		return err
 	}
@@ -237,7 +236,7 @@ func Backup(c *Container, destPath string) error {
 	for i := 0; i < saveHoldQueryRetries; i++ {
 		time.Sleep(saveHoldDelayMilliseconds * time.Millisecond)
 
-		saveQuery, err := commandResponse(c.ID, "save query", logs)
+		saveQuery, err := commandResponse(c, "save query", logs)
 		if err != nil {
 			return err
 		}
@@ -254,7 +253,7 @@ func Backup(c *Container, destPath string) error {
 	}
 
 	// save resume
-	saveResume, err := commandResponse(c.ID, "save resume", logs)
+	saveResume, err := commandResponse(c, "save resume", logs)
 	if err != nil {
 		return err
 	}
@@ -324,7 +323,7 @@ func copyWorldFromContainer(c *Container) (*files.Archive, error) {
 	}
 
 	// Remove 'Bedrock level' directory
-	files := make([]files.File, 0)
+	newFiles := make([]files.File, 0)
 
 	for _, f := range a.Files {
 		f.Name = strings.Replace(f.Name, "Bedrock level/", "", 1)
@@ -334,10 +333,10 @@ func copyWorldFromContainer(c *Container) (*files.Archive, error) {
 			continue
 		}
 
-		files = append(files, f)
+		newFiles = append(newFiles, f)
 	}
 
-	a.Files = files
+	a.Files = newFiles
 
 	return a, nil
 }
@@ -351,57 +350,8 @@ func copyServerPropertiesFromContainer(c *Container) (*files.Archive, error) {
 	return a, nil
 }
 
-func Tail(containerID string, tail int) *bufio.Reader {
-	logs, err := dockerClient().ContainerLogs(
-		context.Background(),
-		containerID,
-		docker.ContainerLogsOptions{
-			ShowStdout: true,
-			ShowStderr: true,
-			Tail:       strconv.Itoa(tail),
-			Follow:     true,
-		},
-	)
-
-	if err != nil {
-		log.Fatalf("creating client: %s", err)
-	}
-
-	return bufio.NewReader(logs)
-}
-
-// Command runs the given arguments separated by spaces as a command in  the bedrock_server process cli on a container.
-func Command(containerID string, args []string) error {
-	// TODO: Log this command
-	// Attach to the container
-	waiter, err := dockerClient().ContainerAttach(
-		context.Background(),
-		containerID,
-		docker.ContainerAttachOptions{
-			Stdin:  true,
-			Stream: true,
-		},
-	)
-
-	if err != nil {
-		return err
-	}
-
-	commandString := strings.Join(args, " ") + "\n"
-
-	// Write the command to the bedrock_server process cli
-	_, err = waiter.Conn.Write([]byte(
-		commandString,
-	))
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func commandResponse(containerID, cmd string, logs *bufio.Reader) (string, error) {
-	err := command(containerID, cmd)
+func commandResponse(c *Container, cmd string, logs *bufio.Reader) (string, error) {
+	err := command(c, cmd)
 	if err != nil {
 		return "", fmt.Errorf("running command `%s`: %s", cmd, err)
 	}
@@ -420,6 +370,6 @@ func commandResponse(containerID, cmd string, logs *bufio.Reader) (string, error
 	return response, nil
 }
 
-func command(containerID string, cmd string) error {
-	return Command(containerID, strings.Split(cmd, " "))
+func command(c *Container, cmd string) error {
+	return c.Command(strings.Split(cmd, " "))
 }

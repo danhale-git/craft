@@ -211,7 +211,7 @@ func zipToFiles(r *zip.Reader) ([]File, error) {
 	return files, nil
 }
 
-func tarToFiles(r io.ReadCloser) ([]File, error) {
+func tarToFiles(r io.Reader) ([]File, error) {
 	tr := tar.NewReader(r)
 
 	files := make([]File, 0)

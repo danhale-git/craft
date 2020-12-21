@@ -19,7 +19,7 @@ var tailCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c := server.GetContainerOrExit(args[0])
 
-		if _, err := io.Copy(os.Stdout, server.Tail(c.ID, 20)); err != nil {
+		if _, err := io.Copy(os.Stdout, server.Tail(c, 20)); err != nil {
 			return fmt.Errorf("copying server output to stdout: %s", err)
 		}
 

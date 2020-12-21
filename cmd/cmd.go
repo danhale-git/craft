@@ -17,7 +17,7 @@ var cmdCmd = &cobra.Command{
 
 		c := server.GetContainerOrExit(containerName)
 
-		err := server.Command(c.ID, command)
+		err := c.Command(command)
 		if err != nil {
 			return err
 		}
