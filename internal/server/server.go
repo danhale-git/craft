@@ -1,19 +1,22 @@
 package server
 
 import (
-	"archive/tar"
 	"archive/zip"
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
 	"io/ioutil"
-	"log"
+	"os"
+	"path"
 	"strconv"
 	"strings"
+	"time"
+
+	"github.com/danhale-git/craft/internal/files"
 
 	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 )
 
@@ -24,27 +27,22 @@ const (
 	anyIP       = "0.0.0.0"                      // Refers to any/all IPv4 addresses
 
 	// Directory to save imported world files
-	worldDirectory = "/bedrock/worlds/Bedrock level"
+	worldDirectory           = "/bedrock/worlds/Bedrock level"
+	mcDirectory              = "/bedrock"
+	serverPropertiesFileName = "server.properties"
 
 	// Run the bedrock_server executable and append its output to log.txt
-	runMCCommand = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server >> log.txt 2>&1"
+	runMCCommand = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server" // >> log.txt 2>&1"
+
+	saveHoldDelayMilliseconds = 100
+	saveHoldQueryRetries      = 100
 )
-
-// newClient creates a default docker client.
-func newClient() *client.Client {
-	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		log.Fatalf("Error: Failed to create new docker client: %s", err)
-	}
-
-	return c
-}
 
 // Run is the equivalent of the following docker command
 //
 //    docker run -d -e EULA=TRUE -p <HOST_PORT>:19132/udp <IMAGE_NAME>
 func Run(hostPort int, name string) error {
-	c := newClient()
+	c := dockerClient()
 	ctx := context.Background()
 
 	// Create port binding between host ip:port and container port
@@ -94,84 +92,111 @@ func Run(hostPort int, name string) error {
 	return nil
 }
 
-// LoadWorld reads a .mcworld zip file and copies the contents to the active world directory for this container.
-func LoadWorld(containerID, mcworldPath string) error {
-	worldData, err := readZipToTarReader(mcworldPath)
-	if err != nil {
-		return fmt.Errorf("reading .mcworld file to tar archive: %s", err)
-	}
-
-	err = newClient().CopyToContainer(
-		context.Background(),
-		containerID,
-		worldDirectory,
-		worldData,
-		docker.CopyToContainerOptions{},
-	)
+// LoadBackup reads the file at backupPath as a zip archive. The archive must contain a valid .mcworld file.
+func LoadBackup(c *Container, backupPath string) error {
+	// Open a zip archive for reading.
+	z, err := zip.OpenReader(backupPath)
 	if err != nil {
 		return err
+	}
+
+	defer z.Close()
+
+	foundWorld := false
+
+	for _, file := range z.File {
+		f, err := file.Open()
+		if err != nil {
+			return err
+		}
+
+		b, err := ioutil.ReadAll(f)
+		if err != nil {
+			return err
+		}
+
+		if strings.HasSuffix(file.Name, ".mcworld") {
+			// World file is copied to the 'Bedrock level' directory
+			foundWorld = true
+
+			z, err := zip.NewReader(bytes.NewReader(b), int64(len(b)))
+			if err != nil {
+				return err
+			}
+
+			w, err := files.NewArchiveFromZip(z)
+			if err != nil {
+				return err
+			}
+
+			err = c.copyTo(worldDirectory, w)
+			if err != nil {
+				return err
+			}
+		} else {
+			// Other files are copied to the directory containing the mc server executable
+			a := files.Archive{}
+
+			a.AddFile(files.File{
+				Name: file.Name,
+				Body: b,
+			})
+
+			return c.copyTo(mcDirectory, &a)
+		}
+	}
+
+	if !foundWorld {
+		return fmt.Errorf("no .mcworld file present in backup")
 	}
 
 	return nil
 }
 
-// readZipToTarReader reads each file in a zip archive, writes it to a tar archive and returns the tar archive reader.
-func readZipToTarReader(mcworldPath string) (*bytes.Buffer, error) {
+// LoadWorld reads a .mcworld zip file and copies the contents to the active world directory for this
+// container.
+func LoadWorld(c *Container, mcworldPath string) error {
 	// Open a zip archive for reading.
 	r, err := zip.OpenReader(mcworldPath)
 	if err != nil {
-		return nil, err
-	}
-	defer r.Close()
-
-	// Create and add files to the archive.
-	var buf bytes.Buffer
-	tw := tar.NewWriter(&buf)
-
-	for _, f := range r.File {
-		b, err := f.Open()
-		if err != nil {
-			return nil, err
-		}
-
-		// Read the file body
-		body, err := ioutil.ReadAll(b)
-		if err != nil {
-			return nil, err
-		}
-
-		if err = b.Close(); err != nil {
-			return nil, err
-		}
-
-		// Preserve the file names and permissions in file header
-		hdr := &tar.Header{
-			Name: f.Name,
-			Mode: int64(f.FileInfo().Mode()),
-			Size: int64(len(body)),
-		}
-		if err := tw.WriteHeader(hdr); err != nil {
-			return nil, err
-		}
-
-		// Write the file body
-		if _, err := tw.Write(body); err != nil {
-			return nil, err
-		}
+		return err
 	}
 
-	if err := tw.Close(); err != nil {
-		return nil, err
+	w, err := files.NewArchiveFromZip(&r.Reader)
+	if err != nil {
+		return err
 	}
 
-	return &buf, nil
+	if err = r.Close(); err != nil {
+		return err
+	}
+
+	return c.copyTo(worldDirectory, w)
 }
 
-// RunMC runs the mc server process on a container.
-func RunMC(containerID string) error {
-	waiter, err := newClient().ContainerAttach(
+// LoadServerProperties copies the fle at the given path to the mc server directory on the container. The
+// file is always renamed to the value of serverPropertiesFileName (server.properties).
+func LoadServerProperties(c *Container, propsPath string) error {
+	propsFile, err := os.Open(propsPath)
+	if err != nil {
+		return fmt.Errorf("opening file '%s': %s", propsPath, err)
+	}
+
+	a, err := files.NewArchiveFromFiles([]*os.File{propsFile})
+	if err != nil {
+		return fmt.Errorf("creating archive: %s", err)
+	}
+
+	a.Files[0].Name = serverPropertiesFileName
+
+	return c.copyTo(mcDirectory, a)
+}
+
+// RunServer runs the mc server process on a container.
+func RunServer(c *Container) error {
+	waiter, err := c.ContainerAttach(
 		context.Background(),
-		containerID,
+		c.ID,
 		docker.ContainerAttachOptions{
 			Stdin:  true,
 			Stream: true,
@@ -190,56 +215,161 @@ func RunMC(containerID string) error {
 	return nil
 }
 
-// Command runs the given arguments separated by spaces as a command in the bedrock_server process cli on a container.
-func Command(containerID string, args []string) error {
-	// Attach to the container
-	waiter, err := newClient().ContainerAttach(
-		context.Background(),
-		containerID,
-		docker.ContainerAttachOptions{
-			Stdin:  true,
-			Stream: true,
-		},
-	)
+// Backup runs the save hold/query/resume command sequence and saves a .mcworld file snapshot to the given local path.
+func Backup(c *Container, destPath string) error {
+	logs := c.logReader()
 
+	saveHold, err := commandResponse(c, "save hold", logs)
 	if err != nil {
 		return err
 	}
 
-	commandString := strings.Join(args, " ") + "\n"
+	switch strings.TrimSpace(saveHold) {
+	case "Saving...":
+	case "The command is already running":
+		break
+	default:
+		return fmt.Errorf("unexpected response to `save hold`: '%s'", saveHold)
+	}
 
-	// Write the command to the bedrock_server process cli
-	_, err = waiter.Conn.Write([]byte(
-		commandString,
-	))
+	// Query until ready for backup
+	for i := 0; i < saveHoldQueryRetries; i++ {
+		time.Sleep(saveHoldDelayMilliseconds * time.Millisecond)
+
+		saveQuery, err := commandResponse(c, "save query", logs)
+		if err != nil {
+			return err
+		}
+
+		// Ready for backup
+		if strings.HasPrefix(saveQuery, "Data saved. Files are now ready to be copied.") {
+			err = backupServer(c, destPath, logs)
+			if err != nil {
+				return fmt.Errorf("backing up server: %s", err)
+			}
+
+			break
+		}
+	}
+
+	// save resume
+	saveResume, err := commandResponse(c, "save resume", logs)
 	if err != nil {
 		return err
+	}
+
+	if strings.TrimSpace(saveResume) != "Changes to the level are resumed." {
+		return fmt.Errorf("unexpected response to `save resume`: '%s'", saveResume)
 	}
 
 	return nil
 }
 
-// ContainerFromName returns the container with the given name.
-func ContainerFromName(name string) (c *docker.Container, b bool) {
-	containers, err := newClient().ContainerList(context.Background(), docker.ContainerListOptions{})
+func backupServer(c *Container, destPath string, logs *bufio.Reader) error {
+	y, m, d := time.Now().Date()
+
+	backupName := fmt.Sprintf("%s_%d-%d-%d_%s",
+		c.name(), y, m, d,
+		strings.Replace(time.Now().Format(time.Kitchen), ":", "-", 1))
+
+	serverBackup := files.Archive{}
+
+	// Back up world
+	worldArchive, err := copyWorldFromContainer(c)
 	if err != nil {
-		panic(err)
+		return fmt.Errorf("copying world data from container: %s", err)
 	}
 
-	foundCount := 0
+	wz, err := worldArchive.Zip()
+	if err != nil {
+		return err
+	}
 
-	for _, ctr := range containers {
-		if strings.Trim(ctr.Names[0], "/") == name {
-			c = &ctr
-			b = true
-			foundCount++
+	serverBackup.AddFile(files.File{
+		Name: fmt.Sprintf("%s.mcworld", backupName),
+		Body: wz.Bytes(),
+	})
+
+	// Back up settings
+	serverPropertiesArchive, err := copyServerPropertiesFromContainer(c)
+	if err != nil {
+		return err
+	}
+
+	serverBackup.AddFile(files.File{
+		Name: serverPropertiesFileName,
+		Body: serverPropertiesArchive.Files[0].Body,
+	})
+
+	// Save to disk
+	err = serverBackup.SaveZip(path.Join(destPath, c.name()), fmt.Sprintf("%s.zip", backupName))
+	if err != nil {
+		return fmt.Errorf("saving server backup: %s", err)
+	}
+
+	// A second line is returned with a list of files, read it to discard it.
+	if _, err := logs.ReadString('\n'); err != nil {
+		return fmt.Errorf("reading 'save query' file list response: %s", err)
+	}
+
+	return nil
+}
+
+func copyWorldFromContainer(c *Container) (*files.Archive, error) {
+	// Copy the world directory and it's contents from the container
+	a, err := c.copyFrom(worldDirectory)
+	if err != nil {
+		return nil, err
+	}
+
+	// Remove 'Bedrock level' directory
+	newFiles := make([]files.File, 0)
+
+	for _, f := range a.Files {
+		f.Name = strings.Replace(f.Name, "Bedrock level/", "", 1)
+
+		// Skip the file representing the 'Bedrock level' directory
+		if len(strings.TrimSpace(f.Name)) == 0 {
+			continue
 		}
+
+		newFiles = append(newFiles, f)
 	}
 
-	// This should never happen as docker doesn't allow containers with matching namess
-	if foundCount > 1 {
-		panic(fmt.Sprintf("ERROR: more than 1 docker containers exist with name: %s\n", name))
+	a.Files = newFiles
+
+	return a, nil
+}
+
+func copyServerPropertiesFromContainer(c *Container) (*files.Archive, error) {
+	a, err := c.copyFrom(path.Join(mcDirectory, serverPropertiesFileName))
+	if err != nil {
+		return nil, fmt.Errorf("copying '%s' from container path %s: %s", serverPropertiesFileName, mcDirectory, err)
 	}
 
-	return
+	return a, nil
+}
+
+func commandResponse(c *Container, cmd string, logs *bufio.Reader) (string, error) {
+	err := command(c, cmd)
+	if err != nil {
+		return "", fmt.Errorf("running command `%s`: %s", cmd, err)
+	}
+
+	// Read command echo to discard it
+	if _, err := logs.ReadString('\n'); err != nil {
+		return "", fmt.Errorf("retrieving echo for command `%s`: %s", cmd, err)
+	}
+
+	// Read command response
+	response, err := logs.ReadString('\n')
+	if err != nil {
+		return "", fmt.Errorf("retrieving `%s` response: %s", cmd, err)
+	}
+
+	return response, nil
+}
+
+func command(c *Container, cmd string) error {
+	return c.Command(strings.Split(cmd, " "))
 }
