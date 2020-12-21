@@ -125,9 +125,9 @@ func (c *Container) Command(args []string) error {
 	return nil
 }
 
-// Tail returns a buffer with the stdout and stderr from the running mc server process. New output will continually
-// be sent to the buffer after creation.
-func (c *Container) Tail(tail int) *bufio.Reader {
+// LogReader returns a buffer with the stdout and stderr from the running mc server process. New output will continually
+// be sent to the buffer.
+func (c *Container) LogReader(tail int) (*bufio.Reader, error) {
 	logs, err := dockerClient().ContainerLogs(
 		context.Background(),
 		c.ID,
@@ -140,10 +140,10 @@ func (c *Container) Tail(tail int) *bufio.Reader {
 	)
 
 	if err != nil {
-		log.Fatalf("getting container logs: %s", err)
+		return nil, fmt.Errorf("getting docker container logs: %s", err)
 	}
 
-	return bufio.NewReader(logs)
+	return bufio.NewReader(logs), nil
 }
 
 // Stop stops the docker container.
