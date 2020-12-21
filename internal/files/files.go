@@ -1,4 +1,4 @@
-package server
+package files
 
 import (
 	"archive/tar"

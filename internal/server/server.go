@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/danhale-git/craft/internal/files"
+
 	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
@@ -123,7 +125,7 @@ func LoadBackup(c *Container, backupPath string) error {
 				return err
 			}
 
-			w, err := NewArchiveFromZip(z)
+			w, err := files.NewArchiveFromZip(z)
 			if err != nil {
 				return err
 			}
@@ -134,9 +136,9 @@ func LoadBackup(c *Container, backupPath string) error {
 			}
 		} else {
 			// Other files are copied to the directory containing the mc server executable
-			a := Archive{}
+			a := files.Archive{}
 
-			a.AddFile(File{
+			a.AddFile(files.File{
 				Name: file.Name,
 				Body: b,
 			})
@@ -161,7 +163,7 @@ func LoadWorld(c *Container, mcworldPath string) error {
 		return err
 	}
 
-	w, err := NewArchiveFromZip(&r.Reader)
+	w, err := files.NewArchiveFromZip(&r.Reader)
 	if err != nil {
 		return err
 	}
@@ -181,7 +183,7 @@ func LoadServerProperties(c *Container, propsPath string) error {
 		return fmt.Errorf("opening file '%s': %s", propsPath, err)
 	}
 
-	a, err := NewArchiveFromFiles([]*os.File{propsFile})
+	a, err := files.NewArchiveFromFiles([]*os.File{propsFile})
 	if err != nil {
 		return fmt.Errorf("creating archive: %s", err)
 	}
@@ -271,7 +273,7 @@ func backupServer(c *Container, destPath string, logs *bufio.Reader) error {
 		c.name(), y, m, d,
 		strings.Replace(time.Now().Format(time.Kitchen), ":", "-", 1))
 
-	serverBackup := Archive{}
+	serverBackup := files.Archive{}
 
 	// Back up world
 	worldArchive, err := copyWorldFromContainer(c)
@@ -284,7 +286,7 @@ func backupServer(c *Container, destPath string, logs *bufio.Reader) error {
 		return err
 	}
 
-	serverBackup.AddFile(File{
+	serverBackup.AddFile(files.File{
 		Name: fmt.Sprintf("%s.mcworld", backupName),
 		Body: wz.Bytes(),
 	})
@@ -295,7 +297,7 @@ func backupServer(c *Container, destPath string, logs *bufio.Reader) error {
 		return err
 	}
 
-	serverBackup.AddFile(File{
+	serverBackup.AddFile(files.File{
 		Name: serverPropertiesFileName,
 		Body: serverPropertiesArchive.Files[0].Body,
 	})
@@ -314,7 +316,7 @@ func backupServer(c *Container, destPath string, logs *bufio.Reader) error {
 	return nil
 }
 
-func copyWorldFromContainer(c *Container) (*Archive, error) {
+func copyWorldFromContainer(c *Container) (*files.Archive, error) {
 	// Copy the world directory and it's contents from the container
 	a, err := c.copyFrom(worldDirectory)
 	if err != nil {
@@ -322,7 +324,7 @@ func copyWorldFromContainer(c *Container) (*Archive, error) {
 	}
 
 	// Remove 'Bedrock level' directory
-	files := make([]File, 0)
+	files := make([]files.File, 0)
 
 	for _, f := range a.Files {
 		f.Name = strings.Replace(f.Name, "Bedrock level/", "", 1)
@@ -340,7 +342,7 @@ func copyWorldFromContainer(c *Container) (*Archive, error) {
 	return a, nil
 }
 
-func copyServerPropertiesFromContainer(c *Container) (*Archive, error) {
+func copyServerPropertiesFromContainer(c *Container) (*files.Archive, error) {
 	a, err := c.copyFrom(path.Join(mcDirectory, serverPropertiesFileName))
 	if err != nil {
 		return nil, fmt.Errorf("copying '%s' from container path %s: %s", serverPropertiesFileName, mcDirectory, err)
