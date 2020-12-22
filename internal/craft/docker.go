@@ -74,10 +74,10 @@ func getContainerID(name string, client client.ContainerAPIClient) (string, erro
 	return "", &ContainerNotFoundError{Name: name}
 }
 
-// Tail returns a buffer with the stdout and stderr from the running mc server process. New output will continually
-// be sent to the buffer after creation.
-func (d *DockerClient) Tail(tail int) *bufio.Reader {
-	logs, err := dockerClient().ContainerLogs(
+// LogReader returns a buffer with the stdout and stderr from the running mc server process. New output will continually
+// be sent to the buffer.
+func (d *DockerClient) LogReader(tail int) (*bufio.Reader, error) {
+	logs, err := d.ContainerLogs(
 		context.Background(),
 		d.containerID,
 		docker.ContainerLogsOptions{
@@ -89,10 +89,10 @@ func (d *DockerClient) Tail(tail int) *bufio.Reader {
 	)
 
 	if err != nil {
-		log.Fatalf("getting container logs: %s", err)
+		return nil, fmt.Errorf("getting docker container logs: %s", err)
 	}
 
-	return bufio.NewReader(logs)
+	return bufio.NewReader(logs), nil
 }
 
 // ContainerNotFoundError tells the caller that no containers were found with the given name.
