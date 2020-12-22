@@ -17,9 +17,9 @@ var tailCmd = &cobra.Command{
 		return cobra.RangeArgs(1, 2)(cmd, args)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c := craft.GetContainerOrExit(args[0])
+		d := craft.NewDockerClientOrExit(args[0])
 
-		if _, err := io.Copy(os.Stdout, c.Tail(20)); err != nil {
+		if _, err := io.Copy(os.Stdout, d.Tail(20)); err != nil {
 			return fmt.Errorf("copying server output to stdout: %s", err)
 		}
 

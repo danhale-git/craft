@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -123,27 +122,6 @@ func (c *Container) Command(args []string) error {
 	}
 
 	return nil
-}
-
-// Tail returns a buffer with the stdout and stderr from the running mc server process. New output will continually
-// be sent to the buffer after creation.
-func (c *Container) Tail(tail int) *bufio.Reader {
-	logs, err := dockerClient().ContainerLogs(
-		context.Background(),
-		c.ID,
-		docker.ContainerLogsOptions{
-			ShowStdout: true,
-			ShowStderr: true,
-			Tail:       strconv.Itoa(tail),
-			Follow:     true,
-		},
-	)
-
-	if err != nil {
-		log.Fatalf("getting container logs: %s", err)
-	}
-
-	return bufio.NewReader(logs)
 }
 
 // Stop stops the docker container.
