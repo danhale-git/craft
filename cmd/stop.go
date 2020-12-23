@@ -31,8 +31,10 @@ var stopCmd = &cobra.Command{
 			}
 		}
 
+		// TODO: Implement DockerClient here
+		d := craft.NewDockerClientOrExit(args[0])
 		// Stop the game server process
-		err = c.Command([]string{"stop"})
+		err = d.Command([]string{"stop"})
 		if err != nil {
 			log.Fatalf("running 'stop' command: %s", err)
 		}

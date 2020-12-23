@@ -221,7 +221,9 @@ func RunServer(c *Container) error {
 func Backup(c *Container, destPath string) error {
 	logs := c.logReader()
 
-	saveHold, err := commandResponse(c, "save hold", logs)
+	d := NewDockerClientOrExit(c.name()) // TODO: Implement DockerClient here
+
+	saveHold, err := commandResponse(d, "save hold", logs)
 	if err != nil {
 		return err
 	}
@@ -238,7 +240,7 @@ func Backup(c *Container, destPath string) error {
 	for i := 0; i < saveHoldQueryRetries; i++ {
 		time.Sleep(saveHoldDelayMilliseconds * time.Millisecond)
 
-		saveQuery, err := commandResponse(c, "save query", logs)
+		saveQuery, err := commandResponse(d, "save query", logs)
 		if err != nil {
 			return err
 		}
@@ -255,7 +257,7 @@ func Backup(c *Container, destPath string) error {
 	}
 
 	// save resume
-	saveResume, err := commandResponse(c, "save resume", logs)
+	saveResume, err := commandResponse(d, "save resume", logs)
 	if err != nil {
 		return err
 	}
@@ -351,8 +353,8 @@ func copyServerPropertiesFromContainer(c *Container) (*files.Archive, error) {
 	return a, nil
 }
 
-func commandResponse(c *Container, cmd string, logs *bufio.Reader) (string, error) {
-	err := command(c, cmd)
+func commandResponse(d *DockerClient, cmd string, logs *bufio.Reader) (string, error) {
+	err := command(d, cmd)
 	if err != nil {
 		return "", fmt.Errorf("running command `%s`: %s", cmd, err)
 	}
@@ -371,6 +373,6 @@ func commandResponse(c *Container, cmd string, logs *bufio.Reader) (string, erro
 	return response, nil
 }
 
-func command(c *Container, cmd string) error {
-	return c.Command(strings.Split(cmd, " "))
+func command(d *DockerClient, cmd string) error {
+	return d.Command(strings.Split(cmd, " "))
 }

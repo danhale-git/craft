@@ -1,11 +1,14 @@
 package craft
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,6 +26,12 @@ type (
 
 	ContainerListDockerClientMock struct {
 		*ContainerAPIDockerClientMock
+	}
+
+	ContainerAttachDockerClientMock struct {
+		*ContainerAPIDockerClientMock
+		Conn   net.Conn
+		Reader *bufio.Reader
 	}
 )
 
@@ -52,6 +61,46 @@ func (m *ContainerListDockerClientMock) ContainerList(_ context.Context, _ types
 	}
 
 	return containers, nil
+}
+
+func TestDockerClient_Command(t *testing.T) {
+	mockClient := &ContainerAttachDockerClientMock{}
+	d := &DockerClient{ContainerAPIClient: mockClient}
+	conn, reader := net.Pipe()
+	mockClient.Conn = conn
+	mockClient.Reader = bufio.NewReader(reader)
+
+	c := []string{"arg1", "arg2", "arg3"}
+
+	go func() {
+		err := d.Command(c)
+		if err != nil {
+			t.Errorf("error returned for valid input")
+		}
+	}()
+
+	want := strings.Join(c, " ") + "\n"
+
+	got, err := mockClient.Reader.ReadString('\n')
+	if err != nil {
+		t.Errorf("error reading command input from mock client: %s", err)
+	}
+
+	if got != want {
+		t.Errorf("want: %s got: %s", want, got)
+	}
+}
+
+//nolint:lll // mock method
+func (m *ContainerAttachDockerClientMock) ContainerAttach(_ context.Context, _ string, _ types.ContainerAttachOptions) (types.HijackedResponse, error) {
+	rw := types.HijackedResponse{
+		Conn:   m.Conn,
+		Reader: m.Reader,
+	}
+
+	fmt.Println("container attach returned")
+
+	return rw, nil
 }
 
 func TestDockerClient_LogReader(t *testing.T) {

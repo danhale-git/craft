@@ -74,6 +74,35 @@ func ContainerID(name string, client client.ContainerAPIClient) (string, error) 
 	return "", &ContainerNotFoundError{Name: name}
 }
 
+// Command runs the given arguments separated by spaces as a command in the bedrock_server process cli.
+func (d *DockerClient) Command(args []string) error {
+	// Attach to the container
+	waiter, err := d.ContainerAttach(
+		context.Background(),
+		d.containerID,
+		docker.ContainerAttachOptions{
+			Stdin:  true,
+			Stream: true,
+		},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	commandString := strings.Join(args, " ") + "\n"
+
+	// Write the command to the bedrock_server process cli
+	_, err = waiter.Conn.Write([]byte(
+		commandString,
+	))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // LogReader returns a buffer with the stdout and stderr from the running mc server process. New output will continually
 // be sent to the buffer.
 func (d *DockerClient) LogReader(tail int) (*bufio.Reader, error) {

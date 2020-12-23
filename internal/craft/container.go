@@ -95,35 +95,6 @@ func GetContainer(name string) *Container {
 	}
 }
 
-// Command runs the given arguments separated by spaces as a command in the bedrock_server process cli.
-func (c *Container) Command(args []string) error {
-	// Attach to the container
-	waiter, err := c.ContainerAttach(
-		context.Background(),
-		c.ID,
-		docker.ContainerAttachOptions{
-			Stdin:  true,
-			Stream: true,
-		},
-	)
-
-	if err != nil {
-		return err
-	}
-
-	commandString := strings.Join(args, " ") + "\n"
-
-	// Write the command to the bedrock_server process cli
-	_, err = waiter.Conn.Write([]byte(
-		commandString,
-	))
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // Stop stops the docker container.
 func (c *Container) Stop() error {
 	timeout := time.Duration(10)
