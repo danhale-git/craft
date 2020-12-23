@@ -9,13 +9,15 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/danhale-git/craft/internal/files"
+
 	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 )
 
 type DockerClient struct {
 	client.ContainerAPIClient
-	containerID string
+	containerName, containerID string
 }
 
 // NewDockerClientOrExit is a convenience function for attempting to find a docker client with the given name. If not
@@ -52,6 +54,7 @@ func NewDockerClient(containerName string) (*DockerClient, error) {
 
 	d := DockerClient{
 		ContainerAPIClient: c,
+		containerName:      containerName,
 		containerID:        id,
 	}
 
@@ -122,6 +125,44 @@ func (d *DockerClient) LogReader(tail int) (*bufio.Reader, error) {
 	}
 
 	return bufio.NewReader(logs), nil
+}
+
+func (d *DockerClient) copyFrom(containerPath string) (*files.Archive, error) {
+	data, _, err := d.CopyFromContainer(
+		context.Background(),
+		d.containerID,
+		containerPath,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("copying data from server at '%s': %s", containerPath, err)
+	}
+
+	archive, err := files.NewArchiveFromTar(data)
+	if err != nil {
+		return nil, fmt.Errorf("reading tar data from '%s' to file archive: %s", containerPath, err)
+	}
+
+	return archive, nil
+}
+
+func (d *DockerClient) copyTo(destPath string, files *files.Archive) error {
+	t, err := files.Tar()
+	if err != nil {
+		return fmt.Errorf("creating tar archive: %s", err)
+	}
+
+	err = d.CopyToContainer(
+		context.Background(),
+		d.containerID,
+		destPath,
+		t,
+		docker.CopyToContainerOptions{},
+	)
+	if err != nil {
+		return fmt.Errorf("copying files to '%s': %s", destPath, err)
+	}
+
+	return nil
 }
 
 // ContainerNotFoundError tells the caller that no containers were found with the given name.
