@@ -32,43 +32,36 @@ func init() {
 				log.Fatalf("Error creating new container: %s", err)
 			}
 
-			var sb *craft.ServerBackup
+			var worldPath, propsPath string
+			if worldPath, err = cmd.Flags().GetString("world"); err != nil {
+				log.Fatal(err)
+			}
 
-			backupPath, _ := cmd.Flags().GetString("backup")
-			if backupPath != "" {
-				sb, err = craft.LoadBackup(d, backupPath)
-				if err != nil {
-					log.Fatalf("loading backup files from disk: %s", err)
-				}
+			if propsPath, err = cmd.Flags().GetString("server-properties"); err != nil {
+				log.Fatal(err)
+			}
 
-				err = sb.Restore()
-				if err != nil {
-					log.Fatalf("restoring backup: %s", err)
-				}
-			} else {
-				worldPath, _ := cmd.Flags().GetString("world")
-				propsPath, _ := cmd.Flags().GetString("server-properties")
+			// ServerFiles is used as a mechanism to load
+			sb := &craft.ServerFiles{Docker: d}
 
-				if worldPath != "" || propsPath != "" {
-					sb = &craft.ServerBackup{Docker: d}
+			if worldPath != "" || propsPath != "" {
 
-					if worldPath != "" {
-						err = sb.LoadFile(worldPath)
-						if err != nil {
-							return err
-						}
+				if worldPath != "" {
+					err = sb.LoadFile(worldPath)
+					if err != nil {
+						return err
 					}
+				}
 
-					if propsPath != "" {
-						err = sb.LoadFile(propsPath)
-						if err != nil {
-							return err
-						}
+				if propsPath != "" {
+					err = sb.LoadFile(propsPath)
+					if err != nil {
+						return err
 					}
 				}
 			}
 
-			if sb != nil && len(sb.Files) > 0 {
+			if len(sb.Files) > 0 {
 				err := sb.Restore()
 				if err != nil {
 					log.Fatalf("Error loading files to server: %s", err)
@@ -88,7 +81,6 @@ func init() {
 	rootCmd.AddCommand(runCmd)
 
 	runCmd.Flags().String("world", "", "Path to a .mcworld file to be loaded.")
-	runCmd.Flags().String("backup", "", "Path to a .zip server backup.")
 	runCmd.Flags().String("server-properties", "", "Path to a server.properties file to be loaded.")
 
 	// TODO: automatically chose an unused port if not given instead of using default port
