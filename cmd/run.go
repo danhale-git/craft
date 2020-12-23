@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"log"
+
 	"github.com/danhale-git/craft/internal/craft"
 
 	"github.com/spf13/cobra"
@@ -29,32 +31,46 @@ var runCmd = &cobra.Command{
 		// Get the container ID
 		c := craft.GetContainerOrExit(name)
 
-		// TODO: Warn the user when --backup is given alongside --world or --server-properties
-		// If a world is specified, copy it
+		d := craft.NewDockerClientOrExit(name)
+
+		var sb *craft.ServerBackup
+
 		backupPath, _ := cmd.Flags().GetString("backup")
 		if backupPath != "" {
-			err = craft.LoadBackup(c, backupPath)
+			sb, err = craft.LoadBackup(d, backupPath)
 			if err != nil {
-				return err
+				log.Fatalf("loading backup files from disk: %s", err)
 			}
 
+			err = sb.Restore()
+			if err != nil {
+				log.Fatalf("restoring backup: %s", err)
+			}
 		} else {
-			// If a world is specified, copy it
 			worldPath, _ := cmd.Flags().GetString("world")
+			propsPath, _ := cmd.Flags().GetString("server-properties")
+
+			sb = &craft.ServerBackup{Docker: d}
+
 			if worldPath != "" {
-				err = craft.LoadWorld(c, worldPath)
+				err = sb.LoadFile(worldPath)
 				if err != nil {
 					return err
 				}
 			}
 
-			// If a world is specified, copy it
-			propsPath, _ := cmd.Flags().GetString("server-properties")
 			if propsPath != "" {
-				err = craft.LoadServerProperties(c, propsPath)
+				err = sb.LoadFile(propsPath)
 				if err != nil {
 					return err
 				}
+			}
+		}
+
+		if len(sb.Files) > 0 {
+			err := sb.Restore()
+			if err != nil {
+				log.Fatalf("Error loading files to server: %s", err)
 			}
 		}
 

@@ -1,13 +1,9 @@
 package craft
 
 import (
-	"archive/zip"
 	"context"
 	"fmt"
-	"os"
 	"strconv"
-
-	"github.com/danhale-git/craft/internal/files"
 
 	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -86,45 +82,6 @@ func Run(hostPort int, name string) error {
 	}
 
 	return nil
-}
-
-// LoadWorld reads a .mcworld zip file and copies the contents to the active world directory for this
-// container.
-func LoadWorld(c *Container, mcworldPath string) error {
-	// Open a zip archive for reading.
-	r, err := zip.OpenReader(mcworldPath)
-	if err != nil {
-		return err
-	}
-
-	w, err := files.NewArchiveFromZip(&r.Reader)
-	if err != nil {
-		return err
-	}
-
-	if err = r.Close(); err != nil {
-		return err
-	}
-
-	return c.copyTo(worldDirectory, w)
-}
-
-// LoadServerProperties copies the fle at the given path to the mc server directory on the container. The
-// file is always renamed to the value of serverPropertiesFileName (server.properties).
-func LoadServerProperties(c *Container, propsPath string) error {
-	propsFile, err := os.Open(propsPath)
-	if err != nil {
-		return fmt.Errorf("opening file '%s': %s", propsPath, err)
-	}
-
-	a, err := files.NewArchiveFromFiles([]*os.File{propsFile})
-	if err != nil {
-		return fmt.Errorf("creating archive: %s", err)
-	}
-
-	a.Files[0].Name = serverPropertiesFileName
-
-	return c.copyTo(mcDirectory, a)
 }
 
 // RunServer runs the mc server process on a container.

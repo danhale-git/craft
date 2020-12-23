@@ -1,15 +1,12 @@
 package craft
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"log"
 	"os"
 	"strings"
 	"time"
-
-	"github.com/danhale-git/craft/internal/files"
 
 	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
@@ -104,73 +101,4 @@ func (c *Container) Stop() error {
 		c.ID,
 		&timeout,
 	)
-}
-
-func (c *Container) name() string {
-	ci, err := c.ContainerInspect(
-		context.Background(),
-		c.ID,
-	)
-	if err != nil {
-		log.Fatalf("Error inspecting container '%s': %s", c.ID, err)
-	}
-
-	return strings.Replace(ci.Name, "/", "", 1)
-}
-
-func (c *Container) copyFrom(containerPath string) (*files.Archive, error) {
-	data, _, err := c.CopyFromContainer(
-		context.Background(),
-		c.ID,
-		containerPath,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("copying data from server at '%s': %s", containerPath, err)
-	}
-
-	archive, err := files.NewArchiveFromTar(data)
-	if err != nil {
-		return nil, fmt.Errorf("reading tar data from '%s' to file archive: %s", containerPath, err)
-	}
-
-	return archive, nil
-}
-
-func (c *Container) copyTo(destPath string, files *files.Archive) error {
-	t, err := files.Tar()
-	if err != nil {
-		return fmt.Errorf("creating tar archive: %s", err)
-	}
-
-	err = c.CopyToContainer(
-		context.Background(),
-		c.ID,
-		destPath,
-		t,
-		docker.CopyToContainerOptions{},
-	)
-	if err != nil {
-		return fmt.Errorf("copying files to '%s': %s", destPath, err)
-	}
-
-	return nil
-}
-
-func (c *Container) logReader() *bufio.Reader {
-	logs, err := c.ContainerLogs(
-		context.Background(),
-		c.ID,
-		docker.ContainerLogsOptions{
-			ShowStdout: true,
-			ShowStderr: true,
-			Tail:       "0",
-			Follow:     true,
-		},
-	)
-
-	if err != nil {
-		log.Fatalf("creating client: %s", err)
-	}
-
-	return bufio.NewReader(logs)
 }

@@ -7,7 +7,9 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -33,7 +35,7 @@ func backupDirectory() string {
 	return path.Join(home, backupDirName)
 }
 
-// NewBackup takes a backup from the server with the given name. It
+// NewBackup takes a backup from the server with the given name.
 func NewBackup(d *DockerClient) (*ServerBackup, error) {
 	sb := ServerBackup{Docker: d, Archive: &files.Archive{}}
 	if err := sb.takeBackup(); err != nil {
@@ -43,7 +45,45 @@ func NewBackup(d *DockerClient) (*ServerBackup, error) {
 	return &sb, nil
 }
 
-// Saves the backup to the default directory. Returns the path the file was saved to or an error.
+// LoadBackup loads backup files from disk.
+func LoadBackup(d *DockerClient, localPath string) (*ServerBackup, error) {
+	sb := ServerBackup{Docker: d, Archive: &files.Archive{}}
+	if err := sb.copyFromDisk(localPath); err != nil {
+		return nil, fmt.Errorf("taking server backup")
+	}
+
+	return &sb, nil
+}
+
+// LoadWorld adds a file to the backup archive.
+func (s *ServerBackup) LoadFile(localPath string) error {
+	if s.Archive == nil {
+		s.Archive = &files.Archive{}
+	}
+
+	zf, err := os.Open(localPath)
+	if err != nil {
+		return fmt.Errorf("opening file: %s", err)
+	}
+
+	b, err := ioutil.ReadAll(zf)
+	if err != nil {
+		return fmt.Errorf("reading file '%s': %s", zf.Name(), err)
+	}
+
+	s.AddFile(&files.File{
+		Name: filepath.Base(localPath),
+		Body: b,
+	})
+
+	if err = zf.Close(); err != nil {
+		return fmt.Errorf("closing file: %s", err)
+	}
+
+	return nil
+}
+
+// Saves the backup to the default local backup directory. Returns the path the file was saved to or an error.
 func (s *ServerBackup) Save() (string, error) {
 	err := s.SaveZip(path.Join(backupDirectory(), s.Docker.containerName), s.fileName())
 	if err != nil {
@@ -51,6 +91,11 @@ func (s *ServerBackup) Save() (string, error) {
 	}
 
 	return path.Join(backupDirectory(), s.Docker.containerName, s.fileName()), nil
+}
+
+// Restore copies the backup files to the server.
+func (s *ServerBackup) Restore() error {
+	return s.restoreBackup()
 }
 
 // Backup runs the save hold/query/resume command sequence and saves a .mcworld file snapshot to the given local path.
@@ -109,6 +154,96 @@ func (s *ServerBackup) takeBackup() error {
 	}
 
 	return nil
+}
+
+func (s *ServerBackup) commandResponse(cmd string, logs *bufio.Reader) (string, error) {
+	err := s.Docker.Command(strings.Split(cmd, " "))
+	if err != nil {
+		return "", fmt.Errorf("running command `%s`: %s", cmd, err)
+	}
+
+	// Read command echo to discard it
+	if _, err := logs.ReadString('\n'); err != nil {
+		return "", fmt.Errorf("retrieving echo for command `%s`: %s", cmd, err)
+	}
+
+	// Read command response
+	response, err := logs.ReadString('\n')
+	if err != nil {
+		return "", fmt.Errorf("retrieving `%s` response: %s", cmd, err)
+	}
+
+	return response, nil
+}
+
+func (s *ServerBackup) restoreBackup() error {
+	foundWorld := false
+
+	for _, file := range s.Files {
+		if strings.HasSuffix(file.Name, ".mcworld") {
+			// World is copied into the the active world directory.
+			foundWorld = true
+
+			// Read the file body into another zip archive (double zipped)
+			z, err := zip.NewReader(bytes.NewReader(file.Body), int64(len(file.Body)))
+			if err != nil {
+				return err
+			}
+
+			w, err := files.NewArchiveFromZip(z)
+			if err != nil {
+				return err
+			}
+
+			err = s.Docker.copyTo(worldDirectory, w)
+			if err != nil {
+				return err
+			}
+		} else {
+			// Other files are copied to the directory containing the mc server executable
+			a := files.Archive{}
+
+			a.AddFile(&files.File{
+				Name: file.Name,
+				Body: file.Body,
+			})
+
+			return s.Docker.copyTo(mcDirectory, &a)
+		}
+	}
+
+	if !foundWorld {
+		return fmt.Errorf("no .mcworld file present in backup")
+	}
+
+	return nil
+}
+
+func (s *ServerBackup) copyFromDisk(localPath string) error {
+	// Open a zip archive for reading.
+	z, err := zip.OpenReader(localPath)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range z.File {
+		f, err := file.Open()
+		if err != nil {
+			return err
+		}
+
+		b, err := ioutil.ReadAll(f)
+		if err != nil {
+			return err
+		}
+
+		s.AddFile(&files.File{
+			Name: file.Name,
+			Body: b,
+		})
+	}
+
+	return z.Close()
 }
 
 func (s *ServerBackup) copyFromServer() error {
@@ -190,87 +325,6 @@ func (s *ServerBackup) copyServerPropertiesFromContainer() (*files.File, error) 
 	}
 
 	return &serverProperties, nil
-}
-
-func (s *ServerBackup) commandResponse(cmd string, logs *bufio.Reader) (string, error) {
-	err := s.Docker.Command(strings.Split(cmd, " "))
-	if err != nil {
-		return "", fmt.Errorf("running command `%s`: %s", cmd, err)
-	}
-
-	// Read command echo to discard it
-	if _, err := logs.ReadString('\n'); err != nil {
-		return "", fmt.Errorf("retrieving echo for command `%s`: %s", cmd, err)
-	}
-
-	// Read command response
-	response, err := logs.ReadString('\n')
-	if err != nil {
-		return "", fmt.Errorf("retrieving `%s` response: %s", cmd, err)
-	}
-
-	return response, nil
-}
-
-// LoadBackup reads the file at backupPath as a zip archive. The archive must contain a valid .mcworld file.
-func LoadBackup(c *Container, backupPath string) error {
-	// Open a zip archive for reading.
-	z, err := zip.OpenReader(backupPath)
-	if err != nil {
-		return err
-	}
-
-	defer z.Close()
-
-	foundWorld := false
-
-	for _, file := range z.File {
-		f, err := file.Open()
-		if err != nil {
-			return err
-		}
-
-		b, err := ioutil.ReadAll(f)
-		if err != nil {
-			return err
-		}
-
-		if strings.HasSuffix(file.Name, ".mcworld") {
-			// World file is copied to the 'Bedrock level' directory
-			foundWorld = true
-
-			z, err := zip.NewReader(bytes.NewReader(b), int64(len(b)))
-			if err != nil {
-				return err
-			}
-
-			w, err := files.NewArchiveFromZip(z)
-			if err != nil {
-				return err
-			}
-
-			err = c.copyTo(worldDirectory, w)
-			if err != nil {
-				return err
-			}
-		} else {
-			// Other files are copied to the directory containing the mc server executable
-			a := files.Archive{}
-
-			a.AddFile(&files.File{
-				Name: file.Name,
-				Body: b,
-			})
-
-			return c.copyTo(mcDirectory, &a)
-		}
-	}
-
-	if !foundWorld {
-		return fmt.Errorf("no .mcworld file present in backup")
-	}
-
-	return nil
 }
 
 // // // //
