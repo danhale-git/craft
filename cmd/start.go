@@ -19,7 +19,8 @@ var startCmd = &cobra.Command{
 		name := args[0]
 
 		// Find the most recent backup
-		backupDir, err := rootCmd.PersistentFlags().GetString("backup-dir")
+		// Flag has been removed!!!!
+		// backupDir, err := rootCmd.PersistentFlags().GetString("backup-dir")
 		if err != nil {
 			return err
 		}

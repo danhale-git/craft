@@ -44,7 +44,7 @@ func dockerClient() *client.Client {
 }
 
 // ListNames returns the name of all containers as a slice of strings.
-func ListNames() ([]string, error) {
+func ServerNames() ([]string, error) {
 	containers, err := dockerClient().ContainerList(
 		context.Background(),
 		docker.ContainerListOptions{},
@@ -61,7 +61,8 @@ func ListNames() ([]string, error) {
 	return names, nil
 }
 
-func BackupServerNames(backupDir string) ([]string, error) {
+func BackupServerNames() ([]string, error) {
+	backupDir := backupDirectory()
 	infos, err := ioutil.ReadDir(backupDir)
 	if err != nil {
 		return nil, fmt.Errorf("reading directory '%s': %s", backupDir, err)
@@ -75,14 +76,14 @@ func BackupServerNames(backupDir string) ([]string, error) {
 	return names, nil
 }
 
-func LatestServerBackup(serverName, backupDir string) (string, error) {
+func LatestServerBackup(serverName string) (string, *time.Time, error) {
+	backupDir := backupDirectory()
 	infos, err := ioutil.ReadDir(path.Join(backupDir, serverName))
 	if err != nil {
-		return "", fmt.Errorf("reading directory '%s': %s", backupDir, err)
+		return "", nil, fmt.Errorf("reading directory '%s': %s", backupDir, err)
 	}
 
-	var mostRecent time.Time
-
+	var mostRecentTime time.Time
 	var mostRecentFileName string
 
 	for _, f := range infos {
@@ -95,15 +96,15 @@ func LatestServerBackup(serverName, backupDir string) (string, error) {
 
 			t, err := time.Parse(backupFilenameTimeLayout, backupTime)
 			if err != nil {
-				return "", fmt.Errorf("parsing time from file name '%s': %s", name, err)
+				return "", nil, fmt.Errorf("parsing time from file name '%s': %s", name, err)
 			}
 
-			if t.After(mostRecent) {
-				mostRecent = t
+			if t.After(mostRecentTime) {
+				mostRecentTime = t
 				mostRecentFileName = name
 			}
 		}
 	}
 
-	return mostRecentFileName, nil
+	return mostRecentFileName, &mostRecentTime, nil
 }
