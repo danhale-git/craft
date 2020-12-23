@@ -45,7 +45,7 @@ func NewDockerClient(containerName string) (*DockerClient, error) {
 		log.Fatalf("Error: Failed to create new docker client: %s", err)
 	}
 
-	id, err := getContainerID(containerName, c)
+	id, err := ContainerID(containerName, c)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +59,7 @@ func NewDockerClient(containerName string) (*DockerClient, error) {
 }
 
 // ContainerFromName returns the ID of the container with the given name or an error if that container doesn't exist.
-func getContainerID(name string, client client.ContainerAPIClient) (string, error) {
+func ContainerID(name string, client client.ContainerAPIClient) (string, error) {
 	containers, err := client.ContainerList(context.Background(), docker.ContainerListOptions{})
 	if err != nil {
 		return "", fmt.Errorf("listing all containers: %s", err)

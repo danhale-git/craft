@@ -3,6 +3,7 @@ package craft
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"testing"
@@ -16,16 +17,45 @@ import (
 )
 
 type (
-	LogReaderDockerClientMock struct {
+	ContainerLogsDockerClientMock struct {
+		*ContainerAPIDockerClientMock
+	}
+
+	ContainerListDockerClientMock struct {
 		*ContainerAPIDockerClientMock
 	}
 )
 
-func TestDockerClient_LogReader(t *testing.T) {
-	d := &DockerClient{
-		ContainerAPIClient: &LogReaderDockerClientMock{},
-		containerID:        "",
+func TestContainerID(t *testing.T) {
+	d := &DockerClient{ContainerAPIClient: &ContainerListDockerClientMock{}}
+
+	for i := 1; i <= 3; i++ {
+		want := fmt.Sprintf("mc%d_ID", i)
+		got, err := ContainerID(fmt.Sprintf("mc%d", i), d)
+
+		if err != nil {
+			t.Errorf("error returned for valid input: %s", err)
+		}
+
+		if got != want {
+			t.Errorf("want: %s got: %s", want, got)
+		}
 	}
+}
+
+//nolint:lll // mock method
+func (m *ContainerListDockerClientMock) ContainerList(_ context.Context, _ types.ContainerListOptions) ([]types.Container, error) {
+	containers := []types.Container{
+		{ID: "mc1_ID", Names: []string{"/mc1"}},
+		{ID: "mc2_ID", Names: []string{"/mc2"}},
+		{ID: "mc3_ID", Names: []string{"/mc3"}},
+	}
+
+	return containers, nil
+}
+
+func TestDockerClient_LogReader(t *testing.T) {
+	d := &DockerClient{ContainerAPIClient: &ContainerLogsDockerClientMock{}}
 
 	r, err := d.LogReader(20)
 	if err != nil {
@@ -43,7 +73,7 @@ func TestDockerClient_LogReader(t *testing.T) {
 }
 
 //nolint:lll // mock method
-func (mlr *LogReaderDockerClientMock) ContainerLogs(_ context.Context, _ string, _ types.ContainerLogsOptions) (io.ReadCloser, error) {
+func (mlr *ContainerLogsDockerClientMock) ContainerLogs(_ context.Context, _ string, _ types.ContainerLogsOptions) (io.ReadCloser, error) {
 	r := ioutil.NopCloser(bytes.NewReader([]byte(`NO LOG FILE! - setting up server logging...
 [2020-12-22 20:24:38 INFO] Starting Server
 [2020-12-22 20:24:38 INFO] Version 1.16.200.2
