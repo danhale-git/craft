@@ -14,9 +14,7 @@ require (
 	github.com/moby/term v0.0.0-20201110203204-bea5bbe245bf // indirect
 	github.com/morikuni/aec v1.0.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
-	github.com/opencontainers/image-spec v1.0.1 // indirect
+	github.com/opencontainers/image-spec v1.0.1
 	github.com/spf13/cobra v1.1.1
-	github.com/spf13/viper v1.7.0
-	golang.org/x/crypto v0.0.0-20190605123033-f99c8df09eb5
 	gotest.tools/v3 v3.0.3 // indirect
 )
