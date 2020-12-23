@@ -1,6 +1,6 @@
 package cmd
 
-import (
+/*import (
 	"log"
 	"path"
 
@@ -65,3 +65,4 @@ func init() {
 	// This TODO and flag is also in run. Consider a better way of managing this. Probably automate it completely.
 	startCmd.Flags().IntP("port", "p", 19132, "External port players connect to.")
 }
+*/

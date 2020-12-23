@@ -1,6 +1,6 @@
 package cmd
 
-import (
+/*import (
 	"fmt"
 	"log"
 
@@ -49,4 +49,4 @@ func init() {
 	rootCmd.AddCommand(stopCmd)
 
 	stopCmd.Flags().Bool("no-backup", false, "Stop the server without backing up first.")
-}
+}*/

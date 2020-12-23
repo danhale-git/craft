@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"log"
 
 	"github.com/danhale-git/craft/internal/craft"
 	"github.com/spf13/cobra"
@@ -30,16 +31,17 @@ func init() {
 }
 
 func runBackup(d *craft.DockerClient) error {
-	out, err := rootCmd.PersistentFlags().GetString("backup-dir")
+	b, err := craft.NewBackup(d)
 	if err != nil {
-		return err
+		log.Fatalf("Error taking backup: %s", err)
 	}
 
-	fmt.Printf("Backing up to %s\n", out)
-
-	if err = craft.Backup(d, out); err != nil {
-		return fmt.Errorf("backing up world: %s", err)
+	p, err := b.Save()
+	if err != nil {
+		log.Fatalf("Error saving backup: %s", err)
 	}
+
+	fmt.Printf("Backup saved to to %s\n", p)
 
 	return nil
 }

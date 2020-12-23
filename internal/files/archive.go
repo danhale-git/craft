@@ -13,7 +13,7 @@ import (
 
 // Archive is a collection of file names and contents
 type Archive struct {
-	Files []File
+	Files []*File
 }
 
 // NewArchiveFromZip converts a zip archive reader into a slice of File struct preserving the name and body of the file.
@@ -40,7 +40,7 @@ func NewArchiveFromTar(r io.ReadCloser) (*Archive, error) {
 
 // NewArchiveFromFiles converts a slice of os.File structs into an Archive.
 func NewArchiveFromFiles(osFiles []*os.File) (*Archive, error) {
-	files := make([]File, 0)
+	files := make([]*File, 0)
 
 	for _, of := range osFiles {
 		b, err := ioutil.ReadAll(of)
@@ -49,7 +49,7 @@ func NewArchiveFromFiles(osFiles []*os.File) (*Archive, error) {
 			return nil, err
 		}
 
-		files = append(files, File{
+		files = append(files, &File{
 			Name: of.Name(),
 			Body: b,
 		})
@@ -65,7 +65,7 @@ type File struct {
 	Body []byte
 }
 
-func (a *Archive) AddFile(f File) {
+func (a *Archive) AddFile(f *File) {
 	a.Files = append(a.Files, f)
 }
 
@@ -115,7 +115,7 @@ func (a *Archive) Tar() (*bytes.Buffer, error) {
 	return filesToTar(a.Files)
 }
 
-func filesToZip(files []File) (*bytes.Buffer, error) {
+func filesToZip(files []*File) (*bytes.Buffer, error) {
 	buf := new(bytes.Buffer)
 	w := zip.NewWriter(buf)
 
@@ -137,7 +137,7 @@ func filesToZip(files []File) (*bytes.Buffer, error) {
 	return buf, nil
 }
 
-func filesToTar(files []File) (*bytes.Buffer, error) {
+func filesToTar(files []*File) (*bytes.Buffer, error) {
 	buf := new(bytes.Buffer)
 	w := tar.NewWriter(buf)
 
@@ -163,8 +163,8 @@ func filesToTar(files []File) (*bytes.Buffer, error) {
 	return buf, nil
 }
 
-func zipToFiles(r *zip.Reader) ([]File, error) {
-	files := make([]File, 0)
+func zipToFiles(r *zip.Reader) ([]*File, error) {
+	files := make([]*File, 0)
 
 	for _, f := range r.File {
 		b, err := f.Open()
@@ -181,7 +181,7 @@ func zipToFiles(r *zip.Reader) ([]File, error) {
 			return nil, err
 		}
 
-		files = append(files, File{
+		files = append(files, &File{
 			Name: f.Name,
 			Body: body,
 		})
@@ -190,10 +190,10 @@ func zipToFiles(r *zip.Reader) ([]File, error) {
 	return files, nil
 }
 
-func tarToFiles(r io.Reader) ([]File, error) {
+func tarToFiles(r io.Reader) ([]*File, error) {
 	tr := tar.NewReader(r)
 
-	files := make([]File, 0)
+	files := make([]*File, 0)
 
 	for {
 		hdr, err := tr.Next()
@@ -210,7 +210,7 @@ func tarToFiles(r io.Reader) ([]File, error) {
 			return nil, fmt.Errorf("reading tar data: %s", err)
 		}
 
-		files = append(files, File{
+		files = append(files, &File{
 			Name: hdr.Name,
 			Mode: os.FileMode(hdr.Mode),
 			Body: b,

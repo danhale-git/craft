@@ -6,20 +6,59 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"path"
 	"strings"
 	"time"
 
+	"github.com/mitchellh/go-homedir"
+
 	"github.com/danhale-git/craft/internal/files"
 )
 
-// type Backup struct { }
+type ServerBackup struct {
+	Docker *DockerClient
+	*files.Archive
+}
+
+const backupDirName = "craft_backups"
+
+func backupDirectory() string {
+	// Find home directory.
+	home, err := homedir.Dir()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return path.Join(home, backupDirName)
+}
+
+// NewBackup takes a backup from the server with the given name. It
+func NewBackup(d *DockerClient) (*ServerBackup, error) {
+	sb := ServerBackup{Docker: d, Archive: &files.Archive{}}
+	if err := sb.takeBackup(); err != nil {
+		return nil, fmt.Errorf("taking server backup")
+	}
+
+	return &sb, nil
+}
+
+// Saves the backup to the default directory. Returns the path the file was saved to or an error.
+func (s *ServerBackup) Save() (string, error) {
+	err := s.SaveZip(path.Join(backupDirectory(), s.Docker.containerName), s.fileName())
+	if err != nil {
+		return "", fmt.Errorf("saving server backup: %s", err)
+	}
+
+	return path.Join(backupDirectory(), s.Docker.containerName, s.fileName()), nil
+}
 
 // Backup runs the save hold/query/resume command sequence and saves a .mcworld file snapshot to the given local path.
-func Backup(d *DockerClient, destPath string) error {
-	logs, err := d.LogReader(0)
+func (s *ServerBackup) takeBackup() error {
+	logs, err := s.Docker.LogReader(0)
 
-	saveHold, err := commandResponse(d, "save hold", logs)
+	// save hold
+	saveHold, err := s.commandResponse("save hold", logs)
 	if err != nil {
 		return err
 	}
@@ -33,17 +72,24 @@ func Backup(d *DockerClient, destPath string) error {
 	}
 
 	// Query until ready for backup
+	// TODO: throw an error when retries are exceeded
 	for i := 0; i < saveHoldQueryRetries; i++ {
 		time.Sleep(saveHoldDelayMilliseconds * time.Millisecond)
 
-		saveQuery, err := commandResponse(d, "save query", logs)
+		saveQuery, err := s.commandResponse("save query", logs)
 		if err != nil {
 			return err
 		}
 
 		// Ready for backup
 		if strings.HasPrefix(saveQuery, "Data saved. Files are now ready to be copied.") {
-			err = backupServer(d, destPath, logs)
+			// A second line is returned with a list of files, read it to discard it.
+			if _, err := logs.ReadString('\n'); err != nil {
+				return fmt.Errorf("reading 'save query' file list response: %s", err)
+			}
+
+			// Copy backup files from server
+			err = s.copyFromServer()
 			if err != nil {
 				return fmt.Errorf("backing up server: %s", err)
 			}
@@ -53,7 +99,7 @@ func Backup(d *DockerClient, destPath string) error {
 	}
 
 	// save resume
-	saveResume, err := commandResponse(d, "save resume", logs)
+	saveResume, err := s.commandResponse("save resume", logs)
 	if err != nil {
 		return err
 	}
@@ -65,64 +111,46 @@ func Backup(d *DockerClient, destPath string) error {
 	return nil
 }
 
-func backupServer(d *DockerClient, destPath string, logs *bufio.Reader) error {
-	backupName := fmt.Sprintf("%s_%s",
-		d.containerName,
-		time.Now().Format(backupFilenameTimeLayout),
-	)
-
-	serverBackup := files.Archive{}
-
+func (s *ServerBackup) copyFromServer() error {
 	// Back up world
-	worldArchive, err := copyWorldFromContainer(d)
+	mcworldFile, err := s.copyWorldFromContainer()
 	if err != nil {
 		return fmt.Errorf("copying world data from container: %s", err)
 	}
 
-	wz, err := worldArchive.Zip()
-	if err != nil {
-		return err
-	}
-
-	serverBackup.AddFile(files.File{
-		Name: fmt.Sprintf("%s.mcworld", backupName),
-		Body: wz.Bytes(),
-	})
+	s.AddFile(mcworldFile)
 
 	// Back up settings
-	serverPropertiesArchive, err := copyServerPropertiesFromContainer(d)
+	serverPropertiesFile, err := s.copyServerPropertiesFromContainer()
 	if err != nil {
-		return err
+		return fmt.Errorf("copying server properties from container")
 	}
 
-	serverBackup.AddFile(files.File{
-		Name: serverPropertiesFileName,
-		Body: serverPropertiesArchive.Files[0].Body,
-	})
-
-	// Save to disk
-	err = serverBackup.SaveZip(path.Join(destPath, d.containerName), fmt.Sprintf("%s.zip", backupName))
-	if err != nil {
-		return fmt.Errorf("saving server backup: %s", err)
-	}
-
-	// A second line is returned with a list of files, read it to discard it.
-	if _, err := logs.ReadString('\n'); err != nil {
-		return fmt.Errorf("reading 'save query' file list response: %s", err)
-	}
+	s.AddFile(serverPropertiesFile)
 
 	return nil
 }
 
-func copyWorldFromContainer(d *DockerClient) (*files.Archive, error) {
+func (s *ServerBackup) fileName() string {
+	return fmt.Sprintf("%s.zip", s.backupName())
+}
+
+func (s *ServerBackup) backupName() string {
+	return fmt.Sprintf("%s_%s",
+		s.Docker.containerName,
+		time.Now().Format(backupFilenameTimeLayout),
+	)
+}
+
+func (s *ServerBackup) copyWorldFromContainer() (*files.File, error) {
 	// Copy the world directory and it's contents from the container
-	a, err := d.copyFrom(worldDirectory)
+	a, err := s.Docker.copyFrom(worldDirectory)
 	if err != nil {
 		return nil, err
 	}
 
 	// Remove 'Bedrock level' directory
-	newFiles := make([]files.File, 0)
+	newFiles := make([]*files.File, 0)
 
 	for _, f := range a.Files {
 		f.Name = strings.Replace(f.Name, "Bedrock level/", "", 1)
@@ -137,20 +165,35 @@ func copyWorldFromContainer(d *DockerClient) (*files.Archive, error) {
 
 	a.Files = newFiles
 
-	return a, nil
+	wz, err := a.Zip()
+	if err != nil {
+		return nil, fmt.Errorf("converting world archive to zip: %s", err)
+	}
+
+	mcwFile := files.File{
+		Name: fmt.Sprintf("%s.mcworld", s.backupName()),
+		Body: wz.Bytes(),
+	}
+
+	return &mcwFile, nil
 }
 
-func copyServerPropertiesFromContainer(d *DockerClient) (*files.Archive, error) {
-	a, err := d.copyFrom(path.Join(mcDirectory, serverPropertiesFileName))
+func (s *ServerBackup) copyServerPropertiesFromContainer() (*files.File, error) {
+	a, err := s.Docker.copyFrom(path.Join(mcDirectory, serverPropertiesFileName))
 	if err != nil {
 		return nil, fmt.Errorf("copying '%s' from container path %s: %s", serverPropertiesFileName, mcDirectory, err)
 	}
 
-	return a, nil
+	serverProperties := files.File{
+		Name: serverPropertiesFileName,
+		Body: a.Files[0].Body,
+	}
+
+	return &serverProperties, nil
 }
 
-func commandResponse(d *DockerClient, cmd string, logs *bufio.Reader) (string, error) {
-	err := command(d, cmd)
+func (s *ServerBackup) commandResponse(cmd string, logs *bufio.Reader) (string, error) {
+	err := s.Docker.Command(strings.Split(cmd, " "))
 	if err != nil {
 		return "", fmt.Errorf("running command `%s`: %s", cmd, err)
 	}
@@ -167,10 +210,6 @@ func commandResponse(d *DockerClient, cmd string, logs *bufio.Reader) (string, e
 	}
 
 	return response, nil
-}
-
-func command(d *DockerClient, cmd string) error {
-	return d.Command(strings.Split(cmd, " "))
 }
 
 // LoadBackup reads the file at backupPath as a zip archive. The archive must contain a valid .mcworld file.
@@ -218,7 +257,7 @@ func LoadBackup(c *Container, backupPath string) error {
 			// Other files are copied to the directory containing the mc server executable
 			a := files.Archive{}
 
-			a.AddFile(files.File{
+			a.AddFile(&files.File{
 				Name: file.Name,
 				Body: b,
 			})
