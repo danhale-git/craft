@@ -38,14 +38,24 @@ func NewBackup(d *DockerClient) (*ServerFiles, error) {
 	return &sb, nil
 }
 
-// LoadBackup loads backup files from disk.
-func LoadBackup(d *DockerClient, localPath string) (*ServerFiles, error) {
-	sb := ServerFiles{Docker: d, Archive: &files.Archive{}}
-	if err := sb.copyFromDisk(localPath); err != nil {
-		return nil, fmt.Errorf("taking server backup")
+// RestoreLatestBackup loads backup files from disk and copies them to the DockerClient container.
+func RestoreLatestBackup(d *DockerClient) error {
+	s := ServerFiles{Docker: d, Archive: &files.Archive{}}
+
+	latestBackup, _, err := LatestServerBackup(d.containerName)
+	if err != nil {
+		return fmt.Errorf("getting most recent backup name: %s", err)
 	}
 
-	return &sb, nil
+	if err := s.copyFromLocalDisk(path.Join(backupDirectory(), d.containerName, latestBackup)); err != nil {
+		return fmt.Errorf("taking server backup: %s", err)
+	}
+
+	if err := s.restoreBackup(); err != nil {
+		return fmt.Errorf("restoring backup files: %s", err)
+	}
+
+	return nil
 }
 
 // LoadWorld adds a file to the backup archive.
@@ -82,12 +92,12 @@ func (s *ServerFiles) LoadFile(localPath string) error {
 
 // Saves the backup to the default local backup directory. Returns the path the file was saved to or an error.
 func (s *ServerFiles) Save() (string, error) {
-	err := s.SaveZip(path.Join(backupDirectory(), s.Docker.containerName), s.fileName())
+	err := s.SaveZip(path.Join(backupDirectory(), s.Docker.containerName), s.newBackupFileName())
 	if err != nil {
 		return "", fmt.Errorf("saving server backup: %s", err)
 	}
 
-	return path.Join(backupDirectory(), s.Docker.containerName, s.fileName()), nil
+	return path.Join(backupDirectory(), s.Docker.containerName, s.newBackupFileName()), nil
 }
 
 // Restore copies the backup files to the server.
@@ -216,7 +226,7 @@ func (s *ServerFiles) restoreBackup() error {
 	return nil
 }
 
-func (s *ServerFiles) copyFromDisk(localPath string) error {
+func (s *ServerFiles) copyFromLocalDisk(localPath string) error {
 	// Open a zip archive for reading.
 	z, err := zip.OpenReader(localPath)
 	if err != nil {
@@ -292,7 +302,7 @@ func (s *ServerFiles) copyWorldFromContainer() (*files.File, error) {
 	}
 
 	mcwFile := files.File{
-		Name: fmt.Sprintf("%s.mcworld", s.backupName()),
+		Name: fmt.Sprintf("%s.mcworld", s.newBackupTimeStamp()),
 		Body: wz.Bytes(),
 	}
 
@@ -323,11 +333,11 @@ func backupDirectory() string {
 	return path.Join(home, backupDirName)
 }
 
-func (s *ServerFiles) fileName() string {
-	return fmt.Sprintf("%s.zip", s.backupName())
+func (s *ServerFiles) newBackupFileName() string {
+	return fmt.Sprintf("%s.zip", s.newBackupTimeStamp())
 }
 
-func (s *ServerFiles) backupName() string {
+func (s *ServerFiles) newBackupTimeStamp() string {
 	return fmt.Sprintf("%s_%s",
 		s.Docker.containerName,
 		time.Now().Format(backupFilenameTimeLayout),
