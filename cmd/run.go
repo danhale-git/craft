@@ -1,78 +1,86 @@
 package cmd
 
 import (
-	"github.com/danhale-git/craft/internal/server"
+	"log"
+	"strings"
+
+	"github.com/danhale-git/craft/internal/craft"
 
 	"github.com/spf13/cobra"
 )
 
-// runCmd represents the run command
-var runCmd = &cobra.Command{
-	Use: "run",
-	Args: func(cmd *cobra.Command, args []string) error {
-		return cobra.RangeArgs(1, 1)(cmd, args)
-	},
-	RunE: func(cmd *cobra.Command, args []string) error {
-		name := args[0]
-
-		// Create a container for the server
-		port, err := cmd.Flags().GetInt("port")
-		if err != nil {
-			return err
-		}
-
-		err = server.Run(port, name)
-		if err != nil {
-			return err
-		}
-
-		// Get the container ID
-		c := server.GetContainerOrExit(name)
-
-		// TODO: Warn the user when --backup is given alongside --world or --server-properties
-		// If a world is specified, copy it
-		backupPath, _ := cmd.Flags().GetString("backup")
-		if backupPath != "" {
-			err = server.LoadBackup(c, backupPath)
+func init() {
+	// runCmd represents the run command
+	runCmd := &cobra.Command{
+		Use:   "run <server name>",
+		Short: "Create a new craft server with the given name.",
+		Long:  "A craft backup .zip file may be provided, or a .mcworld file and/or server.properties.",
+		// Require exactly one argument
+		Args: func(cmd *cobra.Command, args []string) error {
+			return cobra.RangeArgs(1, 1)(cmd, args)
+		},
+		// Create a new docker container, copy files and run the mc server binary
+		RunE: func(cmd *cobra.Command, args []string) error {
+			port, err := cmd.Flags().GetInt("port")
 			if err != nil {
 				return err
 			}
 
-		} else {
-			// If a world is specified, copy it
-			worldPath, _ := cmd.Flags().GetString("world")
-			if worldPath != "" {
-				err = server.LoadWorld(c, worldPath)
-				if err != nil {
-					return err
+			// Create a container for the server
+			d, err := craft.NewContainer(port, args[0])
+			if err != nil {
+				log.Fatalf("Error creating new container: %s", err)
+			}
+
+			var worldPath, propsPath string
+			if worldPath, err = cmd.Flags().GetString("world"); err != nil {
+				log.Fatal(err)
+			}
+
+			if propsPath, err = cmd.Flags().GetString("server-properties"); err != nil {
+				log.Fatal(err)
+			}
+
+			// ServerFiles is used as a mechanism to load
+			sb := &craft.ServerFiles{Docker: d}
+
+			if worldPath != "" || propsPath != "" {
+
+				if worldPath != "" {
+					err = sb.LoadFile(worldPath)
+					if err != nil {
+						return err
+					}
+				}
+
+				if propsPath != "" {
+					err = sb.LoadFile(propsPath)
+					if err != nil {
+						return err
+					}
 				}
 			}
 
-			// If a world is specified, copy it
-			propsPath, _ := cmd.Flags().GetString("server-properties")
-			if propsPath != "" {
-				err = server.LoadServerProperties(c, propsPath)
+			if len(sb.Files) > 0 {
+				err := sb.Restore()
 				if err != nil {
-					return err
+					log.Fatalf("Error loading files to server: %s", err)
 				}
 			}
-		}
 
-		// Run the bedrock_server process
-		err = server.RunServer(c)
-		if err != nil {
-			return err
-		}
+			// Run the bedrock_server process
+			err = d.Command(strings.Split(craft.RunMCCommand, " "))
+			if err != nil {
+				return err
+			}
 
-		return nil
-	},
-}
+			return nil
+		},
+	}
 
-func init() {
 	rootCmd.AddCommand(runCmd)
 
 	runCmd.Flags().String("world", "", "Path to a .mcworld file to be loaded.")
-	runCmd.Flags().String("backup", "", "Path to a .zip server backup.")
 	runCmd.Flags().String("server-properties", "", "Path to a server.properties file to be loaded.")
 
 	// TODO: automatically chose an unused port if not given instead of using default port
