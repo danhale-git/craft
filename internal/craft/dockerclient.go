@@ -70,6 +70,10 @@ func NewDockerClient(containerName string) (*DockerClient, error) {
 //
 //    docker run -d -e EULA=TRUE -p <HOST_PORT>:19132/udp <IMAGE_NAME>
 func NewContainer(hostPort int, name string) (*DockerClient, error) {
+	if hostPort == 0 {
+		hostPort = NextAvailablePort()
+	}
+
 	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		log.Fatalf("Error: Failed to create new docker client: %s", err)
@@ -205,6 +209,37 @@ func (d *DockerClient) LogReader(tail int) (*bufio.Reader, error) {
 	}
 
 	return bufio.NewReader(logs), nil
+}
+
+// GetPort returns the port players use to connect to this server
+func (d *DockerClient) GetPort() (int, error) {
+	c, err := d.ContainerInspect(context.Background(), d.containerID)
+	if err != nil {
+		return 0, err
+	}
+
+	portBindings := c.HostConfig.PortBindings
+
+	if len(portBindings) == 0 {
+		return 0, fmt.Errorf("no ports bound for container %s", d.containerName)
+	}
+
+	var port int
+
+	for _, v := range portBindings {
+		p, err := strconv.Atoi(v[0].HostPort)
+		if err != nil {
+			return 0, fmt.Errorf("error reading container port: %s", err)
+		}
+
+		port = p
+	}
+
+	if port == 0 {
+		panic("port is 0")
+	}
+
+	return port, nil
 }
 
 func (d *DockerClient) copyFrom(containerPath string) (*files.Archive, error) {

@@ -47,7 +47,5 @@ func init() {
 
 	rootCmd.AddCommand(startCmd)
 
-	// TODO: automatically chose an unused port if not given instead of using default port
-	// This TODO and flag is also in run. Consider a better way of managing this. Probably automate it completely.
-	startCmd.Flags().IntP("port", "p", 19132, "External port players connect to.")
+	startCmd.Flags().IntP("port", "p", 0, "External port players connect to.")
 }

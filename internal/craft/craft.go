@@ -43,6 +43,27 @@ func dockerClient() *client.Client {
 	return c
 }
 
+// ActiveServerClients returns a DockerClient for each active server.
+func ActiveServerClients() ([]*DockerClient, error) {
+	names, err := ServerNames()
+	if err != nil {
+		return nil, fmt.Errorf("getting server names: %s", err)
+	}
+
+	clients := make([]*DockerClient, len(names))
+
+	for i, n := range names {
+		c, err := NewDockerClient(n)
+		if err != nil {
+			return nil, fmt.Errorf("creating client for container '%s': %s", n, err)
+		}
+
+		clients[i] = c
+	}
+
+	return clients, nil
+}
+
 // ListNames returns the name of all containers as a slice of strings.
 func ServerNames() ([]string, error) {
 	containers, err := dockerClient().ContainerList(
@@ -64,6 +85,7 @@ func ServerNames() ([]string, error) {
 func BackupServerNames() ([]string, error) {
 	backupDir := backupDirectory()
 	infos, err := ioutil.ReadDir(backupDir)
+
 	if err != nil {
 		return nil, fmt.Errorf("reading directory '%s': %s", backupDir, err)
 	}
@@ -79,11 +101,13 @@ func BackupServerNames() ([]string, error) {
 func LatestServerBackup(serverName string) (string, *time.Time, error) {
 	backupDir := backupDirectory()
 	infos, err := ioutil.ReadDir(path.Join(backupDir, serverName))
+
 	if err != nil {
 		return "", nil, fmt.Errorf("reading directory '%s': %s", backupDir, err)
 	}
 
 	var mostRecentTime time.Time
+
 	var mostRecentFileName string
 
 	for _, f := range infos {
@@ -107,4 +131,36 @@ func LatestServerBackup(serverName string) (string, *time.Time, error) {
 	}
 
 	return mostRecentFileName, &mostRecentTime, nil
+}
+
+func NextAvailablePort() int {
+	clients, err := ActiveServerClients()
+	if err != nil {
+		panic(err)
+	}
+
+	usedPorts := make([]int, len(clients))
+
+	for i, c := range clients {
+		p, err := c.GetPort()
+		if err != nil {
+			panic(err)
+		}
+
+		usedPorts[i] = p
+	}
+
+OUTER:
+	for p := defaultPort; p < defaultPort+100; p++ {
+		for _, up := range usedPorts {
+			if p == up {
+				// Another server is using this port
+				continue OUTER
+			}
+		}
+
+		return p
+	}
+
+	panic("100 ports were not available")
 }

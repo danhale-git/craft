@@ -45,7 +45,6 @@ func init() {
 			sb := &craft.ServerFiles{Docker: d}
 
 			if worldPath != "" || propsPath != "" {
-
 				if worldPath != "" {
 					err = sb.LoadFile(worldPath)
 					if err != nil {
@@ -61,7 +60,7 @@ func init() {
 				}
 			}
 
-			if len(sb.Files) > 0 {
+			if sb.Archive != nil && len(sb.Files) > 0 {
 				err := sb.Restore()
 				if err != nil {
 					log.Fatalf("Error loading files to server: %s", err)
@@ -83,6 +82,5 @@ func init() {
 	runCmd.Flags().String("world", "", "Path to a .mcworld file to be loaded.")
 	runCmd.Flags().String("server-properties", "", "Path to a server.properties file to be loaded.")
 
-	// TODO: automatically chose an unused port if not given instead of using default port
-	runCmd.Flags().IntP("port", "p", 19132, "External port players connect to.")
+	runCmd.Flags().IntP("port", "p", 0, "External port players connect to.")
 }

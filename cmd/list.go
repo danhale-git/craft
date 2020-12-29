@@ -29,8 +29,18 @@ func init() {
 
 			w := tabwriter.NewWriter(os.Stdout, 3, 3, 3, ' ', tabwriter.TabIndent)
 
-			for _, n := range activeNames {
-				if _, err := fmt.Fprintf(w, "%s\trunning\n", n); err != nil {
+			for _, name := range activeNames {
+				c, err := craft.NewDockerClient(name)
+				if err != nil {
+					log.Fatalf("Error creating docker client for container '%s': %s", name, err)
+				}
+
+				port, err := c.GetPort()
+				if err != nil {
+					log.Fatalf("Error getting port for container '%s': '%s'", name, err)
+				}
+
+				if _, err := fmt.Fprintf(w, "%s\trunning - port %d\n", name, port); err != nil {
 					log.Fatalf("Error writing to table: %s", err)
 				}
 			}
