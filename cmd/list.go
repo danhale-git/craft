@@ -5,12 +5,13 @@ import (
 	"log"
 	"os"
 	"text/tabwriter"
-	"time"
 
 	"github.com/danhale-git/craft/internal/craft"
 
 	"github.com/spf13/cobra"
 )
+
+var timeFormat = "02 Jan 2006 3:04PM"
 
 func init() {
 	// listCmd represents the list command
@@ -45,11 +46,24 @@ func init() {
 				}
 			}
 			for _, n := range backupNames {
+				// name is in activeNames
+				if func() bool {
+					for _, an := range activeNames {
+						if an == n {
+							return true
+						}
+					}
+					return false
+				}() {
+					continue
+				}
+
 				_, t, err := craft.LatestServerBackup(n)
 				if err != nil {
 					return fmt.Errorf("getting latest backup file name: %s", err)
 				}
-				if _, err := fmt.Fprintf(w, "%s\tstopped - %s\n", n, t.Format(time.Stamp)); err != nil {
+
+				if _, err := fmt.Fprintf(w, "%s\tstopped - %s\n", n, t.Format(timeFormat)); err != nil {
 					log.Fatalf("Error writing to table: %s", err)
 				}
 			}

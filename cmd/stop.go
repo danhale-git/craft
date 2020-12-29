@@ -23,21 +23,23 @@ func init() {
 				return err
 			}
 
-			// Attempt to back up the server unless instructed otherwise. Abandon stop command if backup fails.
+			// Attempt to back up the server unless instructed otherwise.
 			if !noBackup {
-				if err = runBackup(d); err != nil {
-					fmt.Printf("error trying to take backup of server %s: %s\n", args[0], err)
-					log.Fatalf("Aborting stop command")
+				_, p, err := craft.SaveBackup(d)
+				if err != nil {
+					log.Fatalf("Error taking backup: %s", err)
 				}
+
+				fmt.Printf("Backup saved to to %s\n", p)
 			}
 
 			// Stop the game server process
 			err = d.Command([]string{"stop"})
 			if err != nil {
-				log.Fatalf("running 'stop' command: %s", err)
+				log.Fatalf("Error running 'stop' command: %s", err)
 			}
 
-			// Stop the containers
+			// Stop the docker container
 			return d.Stop()
 		},
 	}

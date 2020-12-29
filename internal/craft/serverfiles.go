@@ -21,21 +21,20 @@ import (
 
 const backupDirName = "craft_backups"
 
-// ServerFiles copies files to and from the local drive and the server's file system. It requires a DockerClient
-// associated with a valid container.
-type ServerFiles struct {
-	Docker *DockerClient
-	*files.Archive
-}
-
-// NewBackup takes a backup from the server with the given name.
-func NewBackup(d *DockerClient) (*ServerFiles, error) {
-	sb := ServerFiles{Docker: d, Archive: &files.Archive{}}
-	if err := sb.takeBackup(); err != nil {
-		return nil, fmt.Errorf("taking server backup")
+// SaveBackup takes a backup from the server and saves it to disk. It returns a pointer to the backup data and the path
+// it was saved to.
+func SaveBackup(d *DockerClient) (*ServerFiles, string, error) {
+	sf := ServerFiles{Docker: d, Archive: &files.Archive{}}
+	if err := sf.takeBackup(); err != nil {
+		return nil, "", fmt.Errorf("taking server backup")
 	}
 
-	return &sb, nil
+	path, err := sf.save()
+	if err != nil {
+		return nil, "", fmt.Errorf("saving backup: %s", err)
+	}
+
+	return &sf, path, nil
 }
 
 // RestoreLatestBackup loads backup files from disk and copies them to the DockerClient container.
@@ -56,6 +55,29 @@ func RestoreLatestBackup(d *DockerClient) error {
 	}
 
 	return nil
+}
+
+// ServerFiles copies files to and from the local drive and the server's file system. It requires a DockerClient
+// associated with a valid container.
+type ServerFiles struct {
+	Docker *DockerClient
+	*files.Archive
+}
+
+// save writes the backup zip to the default local backup directory. Returns the path the file was saved to or an
+// error.
+func (s *ServerFiles) save() (string, error) {
+	err := s.SaveZip(path.Join(backupDirectory(), s.Docker.containerName), s.newBackupFileName())
+	if err != nil {
+		return "", fmt.Errorf("saving server backup: %s", err)
+	}
+
+	return path.Join(backupDirectory(), s.Docker.containerName, s.newBackupFileName()), nil
+}
+
+// Restore copies the backup files to the server.
+func (s *ServerFiles) Restore() error {
+	return s.restoreBackup()
 }
 
 // LoadWorld adds a file to the backup archive.
@@ -88,21 +110,6 @@ func (s *ServerFiles) LoadFile(localPath string) error {
 	}
 
 	return nil
-}
-
-// Saves the backup to the default local backup directory. Returns the path the file was saved to or an error.
-func (s *ServerFiles) Save() (string, error) {
-	err := s.SaveZip(path.Join(backupDirectory(), s.Docker.containerName), s.newBackupFileName())
-	if err != nil {
-		return "", fmt.Errorf("saving server backup: %s", err)
-	}
-
-	return path.Join(backupDirectory(), s.Docker.containerName, s.newBackupFileName()), nil
-}
-
-// Restore copies the backup files to the server.
-func (s *ServerFiles) Restore() error {
-	return s.restoreBackup()
 }
 
 // Backup runs the save hold/query/resume command sequence and saves a .mcworld file snapshot to the given local path.
