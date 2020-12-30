@@ -18,3 +18,6 @@ require (
 	github.com/spf13/cobra v1.1.1
 	gotest.tools/v3 v3.0.3 // indirect
 )
+
+// https://github.com/containerd/containerd/issues/4703
+replace github.com/pkg/errors v0.8.1 => github.com/pkg/errors v0.9.1
