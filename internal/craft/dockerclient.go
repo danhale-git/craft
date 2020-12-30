@@ -21,7 +21,7 @@ import (
 
 type DockerClient struct {
 	client.ContainerAPIClient
-	containerName, containerID string
+	ContainerName, containerID string
 }
 
 // NewDockerClientOrExit is a convenience function for attempting to find a docker client with the given name. If not
@@ -43,7 +43,7 @@ func NewDockerClientOrExit(containerName string) *DockerClient {
 	return d
 }
 
-// NewDockerClient returnsa new default Docker Container API client. If the given container name doesn't exist, an error
+// NewDockerClient returns a new default Docker Container API client. If the given container name doesn't exist an error
 // of type ContainerNotFoundError is returned.
 func NewDockerClient(containerName string) (*DockerClient, error) {
 	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
@@ -58,7 +58,7 @@ func NewDockerClient(containerName string) (*DockerClient, error) {
 
 	d := DockerClient{
 		ContainerAPIClient: c,
-		containerName:      containerName,
+		ContainerName:      containerName,
 		containerID:        id,
 	}
 
@@ -127,7 +127,7 @@ func NewContainer(hostPort int, name string) (*DockerClient, error) {
 
 	d := DockerClient{
 		ContainerAPIClient: c,
-		containerName:      name,
+		ContainerName:      name,
 		containerID:        createResp.ID,
 	}
 
@@ -221,7 +221,7 @@ func (d *DockerClient) GetPort() (int, error) {
 	portBindings := c.HostConfig.PortBindings
 
 	if len(portBindings) == 0 {
-		return 0, fmt.Errorf("no ports bound for container %s", d.containerName)
+		return 0, fmt.Errorf("no ports bound for container %s", d.ContainerName)
 	}
 
 	var port int

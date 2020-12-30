@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"fmt"
 	"log"
+	"os"
 	"strings"
 
 	"github.com/danhale-git/craft/internal/craft"
@@ -13,14 +15,26 @@ func init() {
 	// runCmd represents the run command
 	runCmd := &cobra.Command{
 		Use:   "run <server name>",
-		Short: "Create a new craft server with the given name.",
-		Long:  "A craft backup .zip file may be provided, or a .mcworld file and/or server.properties.",
+		Short: "Create a new server",
+		Long:  "Defaults to a new default world. .mcworld file and optional server.properties may be provided.",
 		// Require exactly one argument
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.RangeArgs(1, 1)(cmd, args)
 		},
 		// Create a new docker container, copy files and run the mc server binary
 		RunE: func(cmd *cobra.Command, args []string) error {
+			backups, err := craft.BackupServerNames()
+			if err != nil {
+				log.Fatalf("Error getting backups: %s", err)
+			}
+
+			for _, b := range backups {
+				if args[0] == b {
+					fmt.Printf("Error: server name '%s' is in use by a backup, run 'craft list -a'", args[0])
+					os.Exit(0)
+				}
+			}
+
 			port, err := cmd.Flags().GetInt("port")
 			if err != nil {
 				return err

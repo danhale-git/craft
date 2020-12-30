@@ -19,7 +19,17 @@ import (
 	"github.com/mitchellh/go-homedir"
 )
 
-const backupDirName = "craft_backups"
+const (
+	worldDirectory           = "/bedrock/worlds/Bedrock level" // Default world directory on the server
+	mcDirectory              = "/bedrock"                      // Directory with the contents of the mc server zip
+	serverPropertiesFileName = "server.properties"             // Name of the server properties (configuration) file
+	backupDirName            = "craft_backups"                 // Name of the local directory where backups are stored
+
+	saveQueryRetries = 100 // The number of times save query can run without the expected response
+	saveQueryDelayMS = 100 // The delay between save query retries, in milliseconds
+
+	backupFilenameTimeLayout = "02-01-2006_15-04" // The format of the file timestamp for the Go time package formatter
+)
 
 // SaveBackup takes a backup from the server and saves it to disk. It returns a pointer to the backup data and the path
 // it was saved to.
@@ -41,12 +51,12 @@ func SaveBackup(d *DockerClient) (*ServerFiles, string, error) {
 func RestoreLatestBackup(d *DockerClient) error {
 	s := ServerFiles{Docker: d, Archive: &files.Archive{}}
 
-	latestBackup, _, err := LatestServerBackup(d.containerName)
+	latestBackup, _, err := LatestServerBackup(d.ContainerName)
 	if err != nil {
 		return fmt.Errorf("getting most recent backup name: %s", err)
 	}
 
-	if err := s.copyFromLocalDisk(path.Join(backupDirectory(), d.containerName, latestBackup)); err != nil {
+	if err := s.copyFromLocalDisk(path.Join(backupDirectory(), d.ContainerName, latestBackup)); err != nil {
 		return fmt.Errorf("taking server backup: %s", err)
 	}
 
@@ -67,12 +77,12 @@ type ServerFiles struct {
 // save writes the backup zip to the default local backup directory. Returns the path the file was saved to or an
 // error.
 func (s *ServerFiles) save() (string, error) {
-	err := s.SaveZip(path.Join(backupDirectory(), s.Docker.containerName), s.newBackupFileName())
+	err := s.SaveZip(path.Join(backupDirectory(), s.Docker.ContainerName), s.newBackupFileName())
 	if err != nil {
 		return "", fmt.Errorf("saving server backup: %s", err)
 	}
 
-	return path.Join(backupDirectory(), s.Docker.containerName, s.newBackupFileName()), nil
+	return path.Join(backupDirectory(), s.Docker.ContainerName, s.newBackupFileName()), nil
 }
 
 // Restore copies the backup files to the server.
@@ -132,8 +142,8 @@ func (s *ServerFiles) takeBackup() error {
 
 	// Query until ready for backup
 	// TODO: throw an error when retries are exceeded
-	for i := 0; i < saveHoldQueryRetries; i++ {
-		time.Sleep(saveHoldDelayMilliseconds * time.Millisecond)
+	for i := 0; i < saveQueryRetries; i++ {
+		time.Sleep(saveQueryDelayMS * time.Millisecond)
 
 		saveQuery, err := s.commandResponse("save query", logs)
 		if err != nil {
@@ -346,7 +356,7 @@ func (s *ServerFiles) newBackupFileName() string {
 
 func (s *ServerFiles) newBackupTimeStamp() string {
 	return fmt.Sprintf("%s_%s",
-		s.Docker.containerName,
+		s.Docker.ContainerName,
 		time.Now().Format(backupFilenameTimeLayout),
 	)
 }

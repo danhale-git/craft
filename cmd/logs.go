@@ -12,10 +12,8 @@ import (
 
 func init() {
 	logsCmd := &cobra.Command{
-		Use:   "logs <server name>",
-		Short: "Copy server log output to your console.",
-		Long: `One argument is required which is the server name.
-Run 'craft list' to see a list of active server names.`,
+		Use:   "logs <server>",
+		Short: "Output server logs",
 		// Accept only one argument
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.ExactArgs(1)(cmd, args)

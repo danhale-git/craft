@@ -19,18 +19,8 @@ const (
 	imageName   = "danhaledocker/craftmine:v1.6" // The name of the docker image to use
 	anyIP       = "0.0.0.0"                      // Refers to any/all IPv4 addresses
 
-	// Directory to save imported world files
-	worldDirectory           = "/bedrock/worlds/Bedrock level"
-	mcDirectory              = "/bedrock"
-	serverPropertiesFileName = "server.properties"
-
 	// Run the bedrock_server executable and append its output to log.txt
 	RunMCCommand = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server" // >> log.txt 2>&1"
-
-	saveHoldDelayMilliseconds = 100
-	saveHoldQueryRetries      = 100
-
-	backupFilenameTimeLayout = "02-01-2006_15-04"
 )
 
 // dockerClient creates a default docker client.
@@ -45,7 +35,7 @@ func dockerClient() *client.Client {
 
 // ActiveServerClients returns a DockerClient for each active server.
 func ActiveServerClients() ([]*DockerClient, error) {
-	names, err := ServerNames()
+	names, err := serverNames()
 	if err != nil {
 		return nil, fmt.Errorf("getting server names: %s", err)
 	}
@@ -64,8 +54,7 @@ func ActiveServerClients() ([]*DockerClient, error) {
 	return clients, nil
 }
 
-// ListNames returns the name of all containers as a slice of strings.
-func ServerNames() ([]string, error) {
+func serverNames() ([]string, error) {
 	containers, err := dockerClient().ContainerList(
 		context.Background(),
 		docker.ContainerListOptions{},
@@ -82,6 +71,7 @@ func ServerNames() ([]string, error) {
 	return names, nil
 }
 
+// BackupServerNames returns a slice with the names of all backed up servers.
 func BackupServerNames() ([]string, error) {
 	backupDir := backupDirectory()
 	infos, err := ioutil.ReadDir(backupDir)
@@ -98,6 +88,7 @@ func BackupServerNames() ([]string, error) {
 	return names, nil
 }
 
+// LatestServerBackup returns the path and backup time of the latest backup for the given server.
 func LatestServerBackup(serverName string) (string, *time.Time, error) {
 	backupDir := backupDirectory()
 	infos, err := ioutil.ReadDir(path.Join(backupDir, serverName))
@@ -133,6 +124,8 @@ func LatestServerBackup(serverName string) (string, *time.Time, error) {
 	return mostRecentFileName, &mostRecentTime, nil
 }
 
+// NextAvailablePort returns the next available port, starting with the default mc port. It checks the first exposed
+// port of all running containers to determine if a port is in use.
 func NextAvailablePort() int {
 	clients, err := ActiveServerClients()
 	if err != nil {
@@ -150,6 +143,7 @@ func NextAvailablePort() int {
 		usedPorts[i] = p
 	}
 
+	// Iterate 100 ports starting with the default
 OUTER:
 	for p := defaultPort; p < defaultPort+100; p++ {
 		for _, up := range usedPorts {
@@ -159,6 +153,7 @@ OUTER:
 			}
 		}
 
+		// The port is available
 		return p
 	}
 

@@ -11,7 +11,8 @@ import (
 func init() {
 	// stopCmd represents the stop command
 	stopCmd := &cobra.Command{
-		Use: "stop",
+		Use:   "stop <server>",
+		Short: "Back up and stop a running server",
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.RangeArgs(1, 1)(cmd, args)
 		},

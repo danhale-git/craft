@@ -12,9 +12,12 @@ import (
 func init() {
 	backupCmd := &cobra.Command{
 		Use:   "backup <server name>",
-		Short: "Take a backup.",
-		Long: "Back up your current world files to a .mcworld export and save to a zip archive along with the current" +
-			" server.properties. If two backups are taken in the same minute, the second will overwrite the first.",
+		Short: "Take a backup",
+		Long: `
+Save the current world and server.properties to a zip file in the backup directory.
+If two backups are taken in the same minute, the second will overwrite the first.
+Backups are saved to a default directory under the user's home directory.
+The backed up world is usually a few seconds behind the world state at the time of backup.`,
 		// Allow only one argument
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.RangeArgs(1, 1)(cmd, args)

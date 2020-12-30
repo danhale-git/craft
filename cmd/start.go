@@ -12,7 +12,8 @@ import (
 func init() {
 	// startCmd represents the start command
 	startCmd := &cobra.Command{
-		Use: "start",
+		Use:   "start <server>",
+		Short: "Start a backed up server",
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.RangeArgs(1, 1)(cmd, args)
 		},

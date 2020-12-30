@@ -10,6 +10,7 @@ import (
 // propsCmd represents the props command
 var propsCmd = &cobra.Command{
 	Use:       "props",
+	Short:     "(not currently in use)",
 	ValidArgs: []string{"set"},
 	Args: func(cmd *cobra.Command, args []string) error {
 		if err := cobra.OnlyValidArgs(cmd, args); err != nil {

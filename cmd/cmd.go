@@ -8,11 +8,12 @@ import (
 // cmdCmd represents the cmd command
 func init() {
 	cmdCmd := &cobra.Command{
-		Use:   "cmd <server name> <mc command>",
-		Short: "Run the given command on the named craft server.",
-		Long: `The first argument is the serer name.
-Any number of following arguments may be provided as a mc server command, for example 'kill MyPlayer'.
-To kill MyPlayer on the server 'myserver' enter: craft cmd myserver kill MyPlayer.`,
+		Use:     "cmd <server> <mc command>",
+		Example: "craft cmd myserver give PlayerName stone 1",
+		Short:   "Run a command on a server",
+		Long: `
+The first argument is the serer name.
+Any number of following arguments may be provided as a mc server command.`,
 		// Accept at 2 or more arguments
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.RangeArgs(2, len(args))(cmd, args)
