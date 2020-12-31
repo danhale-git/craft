@@ -66,6 +66,10 @@ type File struct {
 }
 
 func (a *Archive) AddFile(f *File) {
+	if a.Files == nil {
+		a.Files = make([]*File, 0)
+	}
+
 	a.Files = append(a.Files, f)
 }
 

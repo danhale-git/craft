@@ -20,10 +20,9 @@ import (
 )
 
 const (
-	worldDirectory           = "/bedrock/worlds/Bedrock level" // Default world directory on the server
-	mcDirectory              = "/bedrock"                      // Directory with the contents of the mc server zip
-	serverPropertiesFileName = "server.properties"             // Name of the server properties (configuration) file
-	backupDirName            = "craft_backups"                 // Name of the local directory where backups are stored
+	worldDirectory = "/bedrock/worlds/Bedrock level" // Default world directory on the server
+	mcDirectory    = "/bedrock"                      // Directory with the contents of the mc server zip
+	backupDirName  = "craft_backups"                 // Name of the local directory where backups are stored
 
 	saveQueryRetries = 100 // The number of times save query can run without the expected response
 	saveQueryDelayMS = 100 // The delay between save query retries, in milliseconds
@@ -72,6 +71,74 @@ func RestoreLatestBackup(d *DockerClient) error {
 type ServerFiles struct {
 	Docker *DockerClient
 	*files.Archive
+}
+
+// UpdateServerProperties changes the value of a server properties field.
+func (s *ServerFiles) UpdateServerProperties(field, value string) error {
+	if s.Archive == nil {
+		s.Archive = &files.Archive{}
+	}
+
+	// Create server properties if it doesn't exist
+	if !func() bool {
+		for _, f := range s.Archive.Files {
+			if f.Name == serverPropertiesFileName {
+				return true
+			}
+		}
+		return false
+	}() {
+		s.AddFile(&files.File{
+			Name: serverPropertiesFileName,
+			Body: []byte(serverPropertiesDefaultBody),
+		})
+	}
+
+	// Update the property
+	for _, f := range s.Archive.Files {
+		if f.Name == serverPropertiesFileName {
+			updated, err := setProperty(f.Body, field, value)
+			if err != nil {
+				return fmt.Errorf("updating file data: %s", err)
+			}
+
+			f.Body = updated
+
+			return nil
+		}
+	}
+
+	panic("no server.properties file exists")
+}
+
+func setProperty(data []byte, key, value string) ([]byte, error) {
+	lines := strings.Split(string(data), "\n")
+	alteredLines := make([]byte, 0)
+
+	changed := false
+
+	// Read file data line by line and amend the chosen key's value
+	for _, line := range lines {
+		l := strings.TrimSpace(line)
+
+		property := strings.Split(l, "=")
+
+		// Empty line, comment or other property
+		if len(l) == 0 || string(l[0]) == "#" || property[0] != key {
+			alteredLines = append(alteredLines, []byte(fmt.Sprintf("%s\n", line))...)
+			continue
+		}
+
+		// Found property, alter value
+		alteredLines = append(alteredLines, []byte(fmt.Sprintf("%s=%s\n", key, value))...)
+		changed = true
+	}
+
+	if !changed {
+		return nil, fmt.Errorf("no key was found with name '%s'", key)
+	}
+
+	return alteredLines, nil
 }
 
 // save writes the backup zip to the default local backup directory. Returns the path the file was saved to or an
@@ -370,5 +437,3 @@ func (s *ServerFiles) newBackupTimeStamp() string {
 		time.Now().Format(backupFilenameTimeLayout),
 	)
 }
-
-// // // //

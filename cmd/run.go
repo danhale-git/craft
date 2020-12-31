@@ -55,9 +55,9 @@ func init() {
 				log.Fatal(err)
 			}
 
-			// ServerFiles is used as a mechanism to load
 			sb := &craft.ServerFiles{Docker: d}
 
+			// Load server files if requested
 			if worldPath != "" || propsPath != "" {
 				if worldPath != "" {
 					err = sb.LoadFile(worldPath)
@@ -70,6 +70,25 @@ func init() {
 					err = sb.LoadFile(propsPath)
 					if err != nil {
 						return err
+					}
+				}
+			}
+
+			// Customise server properties
+			props, err := cmd.Flags().GetStringSlice("prop")
+			if err != nil {
+				panic(err)
+			}
+
+			if len(props) > 0 {
+				for _, p := range props {
+					keyVal := strings.Split(p, "=")
+					if len(keyVal) != 2 || keyVal[0] == "" || keyVal[1] == "" {
+						log.Fatalf("Invalid property: '%s'", p)
+					}
+
+					if err := sb.UpdateServerProperties(keyVal[0], keyVal[1]); err != nil {
+						log.Fatalf("Error changing property '%s' to '%s'", keyVal[0], keyVal[1])
 					}
 				}
 			}
@@ -95,6 +114,7 @@ func init() {
 
 	runCmd.Flags().String("world", "", "Path to a .mcworld file to be loaded.")
 	runCmd.Flags().String("server-properties", "", "Path to a server.properties file to be loaded.")
+	runCmd.Flags().StringSlice("prop", []string{}, "A server property name and value e.g. 'gamemode=creative'.")
 
 	runCmd.Flags().IntP("port", "p", 0, "External port players connect to.")
 }
