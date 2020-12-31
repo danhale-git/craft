@@ -344,10 +344,20 @@ func backupDirectory() string {
 	// Find home directory.
 	home, err := homedir.Dir()
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("getting home directory: %s", err)
 	}
 
-	return path.Join(home, backupDirName)
+	backupDir := path.Join(home, backupDirName)
+
+	// Create directory if it doesn't exist
+	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
+		err = os.MkdirAll(backupDir, 0755)
+		if err != nil {
+			log.Fatalf("checking backup directory exists: %s", err)
+		}
+	}
+
+	return backupDir
 }
 
 func (s *ServerFiles) newBackupFileName() string {
