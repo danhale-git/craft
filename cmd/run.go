@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"strings"
@@ -93,12 +94,38 @@ func init() {
 				}
 			}
 
+			// Add files
+			files, err := cmd.Flags().GetStringSlice("files")
+			if err != nil {
+				panic(err)
+			}
+
+			if len(files) > 0 {
+				for _, path := range files {
+					if err = sb.LoadZippedFiles(path); err != nil {
+						log.Fatalf("Error loading file at %s: %s", path, err)
+					}
+				}
+			}
+
+			// Restore all server files if needed
 			if sb.Archive != nil && len(sb.Files) > 0 {
 				err := sb.Restore()
 				if err != nil {
 					log.Fatalf("Error loading files to server: %s", err)
 				}
 			}
+
+			go func() {
+				logs, err := d.LogReader(20)
+				if err != nil {
+					log.Fatalf("Error reading logs from server: %s", err)
+				}
+
+				if _, err := io.Copy(os.Stdout, logs); err != nil {
+					log.Fatalf("Error copying server output to stdout: %s", err)
+				}
+			}()
 
 			// Run the bedrock_server process
 			err = d.Command(strings.Split(craft.RunMCCommand, " "))
@@ -115,6 +142,6 @@ func init() {
 	runCmd.Flags().String("world", "", "Path to a .mcworld file to be loaded.")
 	runCmd.Flags().String("server-properties", "", "Path to a server.properties file to be loaded.")
 	runCmd.Flags().StringSlice("prop", []string{}, "A server property name and value e.g. 'gamemode=creative'.")
-
-	runCmd.Flags().IntP("port", "p", 0, "External port players connect to.")
+	runCmd.Flags().StringSlice("files", []string{},
+		"Full local path to a zip file containing files which will be added to the mc server directory.")
 }

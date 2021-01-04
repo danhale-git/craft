@@ -65,6 +65,19 @@ type File struct {
 	Body []byte
 }
 
+func (a *Archive) LoadZippedFiles(r *zip.Reader) error {
+	files, err := zipToFiles(r)
+	if err != nil {
+		return err
+	}
+
+	for _, f := range files {
+		a.AddFile(f)
+	}
+
+	return nil
+}
+
 func (a *Archive) AddFile(f *File) {
 	if a.Files == nil {
 		a.Files = make([]*File, 0)

@@ -157,8 +157,7 @@ func (s *ServerFiles) Restore() error {
 	return s.restoreBackup()
 }
 
-// LoadWorld adds a file to the backup archive.
-func (s *ServerFiles) LoadFile(localPath string) error {
+func (s *ServerFiles) LoadZippedFiles(localPath string) error {
 	if s.Docker == nil {
 		return errors.New("ServerFiles.Docker may not be nil")
 	}
@@ -172,9 +171,37 @@ func (s *ServerFiles) LoadFile(localPath string) error {
 		return fmt.Errorf("opening file: %s", err)
 	}
 
-	b, err := ioutil.ReadAll(zf)
+	zb, err := ioutil.ReadAll(zf)
 	if err != nil {
-		return fmt.Errorf("reading file '%s': %s", zf.Name(), err)
+		return fmt.Errorf("reading file")
+	}
+
+	z, err := zip.NewReader(bytes.NewReader(zb), int64(len(zb)))
+	if err != nil {
+		return err
+	}
+
+	return s.Archive.LoadZippedFiles(z)
+}
+
+// LoadFile adds a file to the backup archive.
+func (s *ServerFiles) LoadFile(localPath string) error {
+	if s.Docker == nil {
+		return errors.New("ServerFiles.Docker may not be nil")
+	}
+
+	if s.Archive == nil {
+		s.Archive = &files.Archive{}
+	}
+
+	f, err := os.Open(localPath)
+	if err != nil {
+		return fmt.Errorf("opening file: %s", err)
+	}
+
+	b, err := ioutil.ReadAll(f)
+	if err != nil {
+		return fmt.Errorf("reading file '%s': %s", f.Name(), err)
 	}
 
 	s.AddFile(&files.File{
@@ -182,7 +209,7 @@ func (s *ServerFiles) LoadFile(localPath string) error {
 		Body: b,
 	})
 
-	if err = zf.Close(); err != nil {
+	if err = f.Close(); err != nil {
 		return fmt.Errorf("closing file: %s", err)
 	}
 
@@ -268,13 +295,8 @@ func (s *ServerFiles) commandResponse(cmd string, logs *bufio.Reader) (string, e
 }
 
 func (s *ServerFiles) restoreBackup() error {
-	foundWorld := false
-
 	for _, file := range s.Files {
 		if strings.HasSuffix(file.Name, ".mcworld") {
-			// World is copied into the the active world directory.
-			foundWorld = true
-
 			// Read the file body into another zip archive (double zipped)
 			z, err := zip.NewReader(bytes.NewReader(file.Body), int64(len(file.Body)))
 			if err != nil {
@@ -286,8 +308,7 @@ func (s *ServerFiles) restoreBackup() error {
 				return err
 			}
 
-			err = s.Docker.copyTo(worldDirectory, w)
-			if err != nil {
+			if err = s.Docker.copyTo(worldDirectory, w); err != nil {
 				return err
 			}
 		} else {
@@ -299,12 +320,10 @@ func (s *ServerFiles) restoreBackup() error {
 				Body: file.Body,
 			})
 
-			return s.Docker.copyTo(mcDirectory, &a)
+			if err := s.Docker.copyTo(mcDirectory, &a); err != nil {
+				return err
+			}
 		}
-	}
-
-	if !foundWorld {
-		return fmt.Errorf("no .mcworld file present in backup")
 	}
 
 	return nil
