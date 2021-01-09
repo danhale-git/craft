@@ -18,7 +18,7 @@ import (
 const (
 	defaultPort = 19132                          // Default port for player connections
 	protocol    = "UDP"                          // MC uses UDP
-	imageName   = "danhaledocker/craftmine:v1.6" // The name of the docker image to use
+	imageName   = "danhaledocker/craftmine:v1.7" // The name of the docker image to use
 	anyIP       = "0.0.0.0"                      // Refers to any/all IPv4 addresses
 
 	// Run the bedrock_server executable and append its output to log.txt

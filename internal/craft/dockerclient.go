@@ -3,6 +3,7 @@ package craft
 import (
 	"archive/tar"
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"log"
@@ -273,6 +274,21 @@ func (d *DockerClient) copyFromTar(containerPath string) (*tar.Reader, error) {
 	}
 
 	return tar.NewReader(data), nil
+}
+
+func (d *DockerClient) copyToTar(destPath string, tar *bytes.Buffer) error {
+	err := d.CopyToContainer(
+		context.Background(),
+		d.containerID,
+		destPath,
+		tar,
+		docker.CopyToContainerOptions{},
+	)
+	if err != nil {
+		return fmt.Errorf("copying files to '%s': %s", destPath, err)
+	}
+
+	return nil
 }
 
 func (d *DockerClient) copyFrom(containerPath string) (*files.Archive, error) {

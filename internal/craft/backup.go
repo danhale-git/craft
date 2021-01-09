@@ -1,8 +1,10 @@
 package craft
 
 import (
+	"archive/tar"
 	"archive/zip"
 	"bufio"
+	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -62,6 +64,69 @@ func SaveBackup(d *DockerClient) error {
 	err = d.takeBackup(f, c, l)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func RestoreLatestBackup(d *DockerClient) error {
+	backupName, _, err := LatestServerBackup(d.ContainerName)
+	if err != nil {
+		return err
+	}
+
+	// Open backup zip
+	zr, err := zip.OpenReader(filepath.Join(d.backupDirectory(), backupName))
+	if err != nil {
+		return err
+	}
+
+	// Write zipped files to tar archive
+	for _, f := range zr.File {
+		var data bytes.Buffer
+		tw := tar.NewWriter(&data)
+
+		file, err := f.Open()
+		if err != nil {
+			return err
+		}
+
+		b, err := ioutil.ReadAll(file)
+		if err != nil {
+			return err
+		}
+
+		// Create tar file
+		name := filepath.Base(f.Name)
+		dir := filepath.Dir(f.Name)
+
+		hdr := &tar.Header{
+			Name: name,
+			Size: int64(len(b)),
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			log.Fatal(err)
+		}
+
+		if _, err := tw.Write(b); err != nil {
+			log.Fatal(err)
+		}
+
+		// Close zip file and tar writer
+		if err = file.Close(); err != nil {
+			return err
+		}
+
+		if err = tw.Close(); err != nil {
+			return err
+		}
+
+		err = d.copyToTar(filepath.Join(serverDirectoryPath, dir), &data)
+		if err != nil {
+			fmt.Printf("%T", err)
+
+			return err
+		}
 	}
 
 	return nil
@@ -149,7 +214,6 @@ func (d *DockerClient) copyBackupFiles(filePaths []string, out io.Writer) error 
 	zw := zip.NewWriter(out)
 
 	for _, p := range filePaths {
-		fmt.Println("copying", filepath.Join(serverDirectoryPath, p))
 		tr, err := d.copyFromTar(filepath.Join(serverDirectoryPath, p))
 		if err != nil {
 			return err

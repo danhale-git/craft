@@ -42,7 +42,7 @@ func SaveBackup(d *DockerClient) (*ServerFiles, string, error) {
 	return &sf, path, nil
 }*/
 
-// RestoreLatestBackup loads backup files from disk and copies them to the DockerClient container.
+/*// RestoreLatestBackup loads backup files from disk and copies them to the DockerClient container.
 func RestoreLatestBackup(d *DockerClient) error {
 	s := ServerFiles{Docker: d, Archive: &files.Archive{}}
 
@@ -60,7 +60,7 @@ func RestoreLatestBackup(d *DockerClient) error {
 	}
 
 	return nil
-}
+}*/
 
 // ServerFiles copies files to and from the local drive and the server's file system. It requires a DockerClient
 // associated with a valid container.
