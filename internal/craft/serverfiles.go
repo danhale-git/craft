@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -15,8 +14,6 @@ import (
 	"time"
 
 	"github.com/danhale-git/craft/internal/files"
-
-	"github.com/mitchellh/go-homedir"
 )
 
 const (
@@ -27,10 +24,9 @@ const (
 	saveQueryRetries = 100 // The number of times save query can run without the expected response
 	saveQueryDelayMS = 100 // The delay between save query retries, in milliseconds
 
-	backupFilenameTimeLayout = "02-01-2006_15-04" // The format of the file timestamp for the Go time package formatter
 )
 
-// SaveBackup takes a backup from the server and saves it to disk. It returns a pointer to the backup data and the path
+/*// SaveBackup takes a backup from the server and saves it to disk. It returns a pointer to the backup data and the path
 // it was saved to.
 func SaveBackup(d *DockerClient) (*ServerFiles, string, error) {
 	sf := ServerFiles{Docker: d, Archive: &files.Archive{}}
@@ -44,7 +40,7 @@ func SaveBackup(d *DockerClient) (*ServerFiles, string, error) {
 	}
 
 	return &sf, path, nil
-}
+}*/
 
 // RestoreLatestBackup loads backup files from disk and copies them to the DockerClient container.
 func RestoreLatestBackup(d *DockerClient) error {
@@ -424,26 +420,6 @@ func (s *ServerFiles) copyServerPropertiesFromContainer() (*files.File, error) {
 	}
 
 	return &serverProperties, nil
-}
-
-func backupDirectory() string {
-	// Find home directory.
-	home, err := homedir.Dir()
-	if err != nil {
-		log.Fatalf("getting home directory: %s", err)
-	}
-
-	backupDir := path.Join(home, backupDirName)
-
-	// Create directory if it doesn't exist
-	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
-		err = os.MkdirAll(backupDir, 0755)
-		if err != nil {
-			log.Fatalf("checking backup directory exists: %s", err)
-		}
-	}
-
-	return backupDir
 }
 
 func (s *ServerFiles) newBackupFileName() string {

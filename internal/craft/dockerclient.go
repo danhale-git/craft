@@ -1,10 +1,12 @@
 package craft
 
 import (
+	"archive/tar"
 	"bufio"
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -179,6 +181,24 @@ func (d *DockerClient) Command(args []string) error {
 	return nil
 }
 
+// CommandWriter returns a *net.Conn which streams to the mc server process stdin.
+func (d *DockerClient) CommandWriter() (net.Conn, error) {
+	// Attach to the container
+	waiter, err := d.ContainerAttach(
+		context.Background(),
+		d.containerID,
+		docker.ContainerAttachOptions{
+			Stdin:  true,
+			Stream: true,
+		},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return waiter.Conn, err
+}
+
 // Stop stops the docker container.
 func (d *DockerClient) Stop() error {
 	timeout := time.Duration(10)
@@ -240,6 +260,19 @@ func (d *DockerClient) GetPort() (int, error) {
 	}
 
 	return port, nil
+}
+
+func (d *DockerClient) copyFromTar(containerPath string) (*tar.Reader, error) {
+	data, _, err := d.CopyFromContainer(
+		context.Background(),
+		d.containerID,
+		containerPath,
+	)
+	if err != nil {
+		return nil, fmt.Errorf("copying data from server at '%s': %s", containerPath, err)
+	}
+
+	return tar.NewReader(data), nil
 }
 
 func (d *DockerClient) copyFrom(containerPath string) (*files.Archive, error) {

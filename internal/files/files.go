@@ -1,6 +1,10 @@
 package files
 
 import (
+	"archive/zip"
+	"bytes"
+	"fmt"
+	"io/ioutil"
 	"os"
 	"path"
 	"sort"
@@ -46,4 +50,18 @@ func (s filesByName) Less(i, j int) bool {
 
 func SortFilesByName(files []os.FileInfo) {
 	sort.Sort(filesByName(files))
+}
+
+func OpenZipReader(localPath string) (*zip.Reader, error) {
+	zf, err := os.Open(localPath)
+	if err != nil {
+		return nil, fmt.Errorf("opening file: %s", err)
+	}
+
+	zb, err := ioutil.ReadAll(zf)
+	if err != nil {
+		return nil, fmt.Errorf("reading file")
+	}
+
+	return zip.NewReader(bytes.NewReader(zb), int64(len(zb)))
 }

@@ -1,6 +1,5 @@
 package craft
 
-var serverPropertiesFileName string = "server.properties" // Name of the server properties (configuration) file
 var serverPropertiesDefaultBody string = `server-name=Dedicated Server
 # Used as the server name
 # Allowed values: Any string

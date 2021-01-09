@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"os"
 	"path"
 	"strings"
 	"time"
 
 	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
+	"github.com/mitchellh/go-homedir"
 )
 
 const (
@@ -158,4 +160,24 @@ OUTER:
 	}
 
 	panic("100 ports were not available")
+}
+
+func backupDirectory() string {
+	// Find home directory.
+	home, err := homedir.Dir()
+	if err != nil {
+		log.Fatalf("getting home directory: %s", err)
+	}
+
+	backupDir := path.Join(home, backupDirName)
+
+	// Create directory if it doesn't exist
+	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
+		err = os.MkdirAll(backupDir, 0755)
+		if err != nil {
+			log.Fatalf("checking backup directory exists: %s", err)
+		}
+	}
+
+	return backupDir
 }

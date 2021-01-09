@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/danhale-git/craft/internal/craft"
@@ -26,12 +25,10 @@ func init() {
 
 			// Attempt to back up the server unless instructed otherwise.
 			if !noBackup {
-				_, p, err := craft.SaveBackup(d)
+				err := craft.SaveBackup(d)
 				if err != nil {
 					log.Fatalf("Error taking backup: %s", err)
 				}
-
-				fmt.Printf("Backup saved to to %s\n", p)
 			}
 
 			// Stop the game server process

@@ -139,6 +139,7 @@ func init() {
 
 	rootCmd.AddCommand(runCmd)
 
+	runCmd.Flags().IntP("port", "p", 0, "External port players connect to.")
 	runCmd.Flags().String("world", "", "Path to a .mcworld file to be loaded.")
 	runCmd.Flags().String("server-properties", "", "Path to a server.properties file to be loaded.")
 	runCmd.Flags().StringSlice("prop", []string{}, "A server property name and value e.g. 'gamemode=creative'.")

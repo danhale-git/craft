@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/danhale-git/craft/internal/craft"
@@ -26,12 +25,10 @@ The backed up world is usually a few seconds behind the world state at the time 
 		Run: func(cmd *cobra.Command, args []string) {
 			d := craft.NewDockerClientOrExit(args[0])
 
-			_, p, err := craft.SaveBackup(d)
+			err := craft.SaveBackup(d)
 			if err != nil {
 				log.Fatalf("Error taking backup: %s", err)
 			}
-
-			fmt.Printf("Backup saved to to %s\n", p)
 		},
 	}
 
