@@ -6,6 +6,8 @@ import (
 	"os"
 	"text/tabwriter"
 
+	"github.com/danhale-git/craft/internal/docker"
+
 	"github.com/danhale-git/craft/internal/craft"
 
 	"github.com/spf13/cobra"
@@ -22,13 +24,13 @@ func init() {
 			w := tabwriter.NewWriter(os.Stdout, 3, 3, 3, ' ', tabwriter.TabIndent)
 
 			// List running servers
-			servers, err := craft.ActiveServerClients()
+			servers, err := docker.ActiveServerClients()
 			if err != nil {
 				log.Fatalf("Error getting server clients: %s", err)
 			}
 
 			for _, s := range servers {
-				c, err := craft.NewDockerClient(s.ContainerName)
+				c, err := docker.NewDockerClient(s.ContainerName)
 				if err != nil {
 					log.Fatalf("Error creating docker client for container '%s': %s", s.ContainerName, err)
 				}

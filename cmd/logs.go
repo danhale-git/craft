@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/danhale-git/craft/internal/craft"
+	"github.com/danhale-git/craft/internal/docker"
 
 	"github.com/spf13/cobra"
 )
@@ -20,7 +20,7 @@ func init() {
 		},
 		// Read logs from a container and copy them to stdout
 		Run: func(cmd *cobra.Command, args []string) {
-			c := craft.NewDockerClientOrExit(args[0])
+			c := docker.NewDockerClientOrExit(args[0])
 
 			tail, err := cmd.Flags().GetInt("tail")
 			if err != nil {

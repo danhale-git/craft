@@ -1,4 +1,4 @@
-package craft
+package docker
 
 import (
 	"archive/tar"
@@ -9,13 +9,9 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
-	"os"
-	"path"
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/mitchellh/go-homedir"
 )
 
 const (
@@ -23,8 +19,10 @@ const (
 	worldsDirectoryName      = "worlds"            // The directory where worlds are stored
 	serverPropertiesFileName = "server.properties" // Name of the server properties (configuration) file
 
-	backupFilenameTimeLayout = "02-01-2006_15-04" // The format of the file timestamp for the Go time package formatter
+	BackupFilenameTimeLayout = "02-01-2006_15-04" // The format of the file timestamp for the Go time package formatter
 
+	saveQueryRetries = 100 // The number of times save query can run without the expected response
+	saveQueryDelayMS = 100 // The delay between save query retries, in milliseconds
 )
 
 // files backed up for Craft
@@ -210,29 +208,9 @@ func (d *DockerClient) copyBackupFiles(filePaths []string, out io.Writer) error 
 	return nil
 }
 
-func (d *DockerClient) backupDirectory() string {
-	// Find home directory.
-	home, err := homedir.Dir()
-	if err != nil {
-		log.Fatalf("getting home directory: %s", err)
-	}
-
-	backupDir := path.Join(home, backupDirName, d.ContainerName)
-
-	// Create directory if it doesn't exist
-	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
-		err = os.MkdirAll(backupDir, 0755)
-		if err != nil {
-			log.Fatalf("checking backup directory exists: %s", err)
-		}
-	}
-
-	return backupDir
-}
-
-func (d *DockerClient) newBackupTimeStamp() string {
+func (d *DockerClient) NewBackupTimeStamp() string {
 	return fmt.Sprintf("%s_%s",
 		d.ContainerName,
-		time.Now().Format(backupFilenameTimeLayout),
+		time.Now().Format(BackupFilenameTimeLayout),
 	)
 }

@@ -1,4 +1,4 @@
-package craft
+package docker
 
 import (
 	"bufio"

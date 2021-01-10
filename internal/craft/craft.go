@@ -2,7 +2,6 @@ package craft
 
 import (
 	"archive/zip"
-	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -12,67 +11,21 @@ import (
 	"strings"
 	"time"
 
-	docker "github.com/docker/docker/api/types"
-	"github.com/docker/docker/client"
+	"github.com/danhale-git/craft/internal/docker"
+
 	"github.com/mitchellh/go-homedir"
 )
 
+// Run the bedrock_server executable
 const (
-	defaultPort = 19132                          // Default port for player connections
-	protocol    = "UDP"                          // MC uses UDP
-	imageName   = "danhaledocker/craftmine:v1.7" // The name of the docker image to use
-	anyIP       = "0.0.0.0"                      // Refers to any/all IPv4 addresses
+	backupDirName = "craft_backups" // Name of the local directory where backups are stored
 
-	// Run the bedrock_server executable and append its output to log.txt
-	RunMCCommand = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server" // >> log.txt 2>&1"
+	RunMCCommand = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server"
 )
 
-// dockerClient creates a default docker client.
-func dockerClient() *client.Client {
-	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		log.Fatalf("Error: Failed to create new docker client: %s", err)
-	}
-
-	return c
-}
-
-// ActiveServerClients returns a DockerClient for each active server.
-func ActiveServerClients() ([]*DockerClient, error) {
-	names, err := serverNames()
-	if err != nil {
-		return nil, fmt.Errorf("getting server names: %s", err)
-	}
-
-	clients := make([]*DockerClient, len(names))
-
-	for i, n := range names {
-		c, err := NewDockerClient(n)
-		if err != nil {
-			return nil, fmt.Errorf("creating client for container '%s': %s", n, err)
-		}
-
-		clients[i] = c
-	}
-
-	return clients, nil
-}
-
-func serverNames() ([]string, error) {
-	containers, err := dockerClient().ContainerList(
-		context.Background(),
-		docker.ContainerListOptions{},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("listing docker containers: %s", err)
-	}
-
-	names := make([]string, len(containers))
-	for i, c := range containers {
-		names[i] = strings.Replace(c.Names[0], "/", "", 1)
-	}
-
-	return names, nil
+// RunServer runs RunMCCommand on the given docker client.
+func RunServer(d *docker.DockerClient) error {
+	return d.Command(strings.Split(RunMCCommand, " "))
 }
 
 // BackupServerNames returns a slice with the names of all backed up servers.
@@ -113,7 +66,7 @@ func LatestServerBackup(serverName string) (string, *time.Time, error) {
 			backupTime := strings.Replace(name, prefix, "", 1)
 			backupTime = strings.Split(backupTime, ".")[0]
 
-			t, err := time.Parse(backupFilenameTimeLayout, backupTime)
+			t, err := time.Parse(docker.BackupFilenameTimeLayout, backupTime)
 			if err != nil {
 				return "", nil, fmt.Errorf("parsing time from file name '%s': %s", name, err)
 			}
@@ -128,20 +81,21 @@ func LatestServerBackup(serverName string) (string, *time.Time, error) {
 	return mostRecentFileName, &mostRecentTime, nil
 }
 
-func SaveBackup(d *DockerClient) error {
-	dirPath := d.backupDirectory()
-	fileName := fmt.Sprintf("%s.zip", d.newBackupTimeStamp())
+// SaveBackup takes a new backup and saves it to the default backup directory.
+func SaveBackup(d *docker.DockerClient) error {
+	backupPath := filepath.Join(backupDirectory(), d.ContainerName)
+	fileName := fmt.Sprintf("%s.zip", d.NewBackupTimeStamp())
 
 	// Create the directory if it doesn't exist
-	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
-		err = os.MkdirAll(dirPath, 0755)
+	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+		err = os.MkdirAll(backupPath, 0755)
 		if err != nil {
 			return err
 		}
 	}
 
 	// Create the file
-	f, err := os.Create(path.Join(dirPath, fileName))
+	f, err := os.Create(path.Join(backupPath, fileName))
 	if err != nil {
 		return err
 	}
@@ -165,55 +119,21 @@ func SaveBackup(d *DockerClient) error {
 	return nil
 }
 
-func RestoreLatestBackup(d *DockerClient) error {
+// RestoreBackup finds the latest backup and restores it to the server.
+func RestoreLatestBackup(d *docker.DockerClient) error {
+	backupPath := filepath.Join(backupDirectory(), d.ContainerName)
 	backupName, _, err := LatestServerBackup(d.ContainerName)
 	if err != nil {
 		return err
 	}
 
 	// Open backup zip
-	zr, err := zip.OpenReader(filepath.Join(d.backupDirectory(), backupName))
+	zr, err := zip.OpenReader(filepath.Join(backupPath, backupName))
 	if err != nil {
 		return err
 	}
 
 	return d.RestoreBackup(zr)
-}
-
-// NextAvailablePort returns the next available port, starting with the default mc port. It checks the first exposed
-// port of all running containers to determine if a port is in use.
-func NextAvailablePort() int {
-	clients, err := ActiveServerClients()
-	if err != nil {
-		panic(err)
-	}
-
-	usedPorts := make([]int, len(clients))
-
-	for i, c := range clients {
-		p, err := c.GetPort()
-		if err != nil {
-			panic(err)
-		}
-
-		usedPorts[i] = p
-	}
-
-	// Iterate 100 ports starting with the default
-OUTER:
-	for p := defaultPort; p < defaultPort+100; p++ {
-		for _, up := range usedPorts {
-			if p == up {
-				// Another server is using this port
-				continue OUTER
-			}
-		}
-
-		// The port is available
-		return p
-	}
-
-	panic("100 ports were not available")
 }
 
 func backupDirectory() string {
@@ -234,4 +154,44 @@ func backupDirectory() string {
 	}
 
 	return backupDir
+}
+
+/*if f.Name == docker.serverPropertiesFileName {
+	updated, err := setProperty(f.Body, field, value)
+	if err != nil {
+		return fmt.Errorf("updating file data: %s", err)
+	}
+
+	f.Body = updated
+
+	return nil
+}*/
+func setProperty(data []byte, key, value string) ([]byte, error) {
+	lines := strings.Split(string(data), "\n")
+	alteredLines := make([]byte, 0)
+
+	changed := false
+
+	// Read file data line by line and amend the chosen key's value
+	for _, line := range lines {
+		l := strings.TrimSpace(line)
+
+		property := strings.Split(l, "=")
+
+		// Empty line, comment or other property
+		if len(l) == 0 || string(l[0]) == "#" || property[0] != key {
+			alteredLines = append(alteredLines, []byte(fmt.Sprintf("%s\n", line))...)
+			continue
+		}
+
+		// Found property, alter value
+		alteredLines = append(alteredLines, []byte(fmt.Sprintf("%s=%s\n", key, value))...)
+		changed = true
+	}
+
+	if !changed {
+		return nil, fmt.Errorf("no key was found with name '%s'", key)
+	}
+
+	return alteredLines, nil
 }

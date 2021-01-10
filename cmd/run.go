@@ -5,7 +5,8 @@ import (
 	"io"
 	"log"
 	"os"
-	"strings"
+
+	"github.com/danhale-git/craft/internal/docker"
 
 	"github.com/danhale-git/craft/internal/craft"
 
@@ -42,12 +43,12 @@ func init() {
 			}
 
 			// Create a container for the server
-			d, err := craft.NewContainer(port, args[0])
+			d, err := docker.NewContainer(port, args[0])
 			if err != nil {
 				log.Fatalf("Error creating new container: %s", err)
 			}
 
-			var worldPath, propsPath string
+			/*var worldPath, propsPath string
 			if worldPath, err = cmd.Flags().GetString("world"); err != nil {
 				log.Fatal(err)
 			}
@@ -114,7 +115,7 @@ func init() {
 				if err != nil {
 					log.Fatalf("Error loading files to server: %s", err)
 				}
-			}
+			}*/
 
 			go func() {
 				logs, err := d.LogReader(20)
@@ -127,11 +128,7 @@ func init() {
 				}
 			}()
 
-			// Run the bedrock_server process
-			err = d.Command(strings.Split(craft.RunMCCommand, " "))
-			if err != nil {
-				return err
-			}
+			err = craft.RunServer(d)
 
 			return nil
 		},

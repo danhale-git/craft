@@ -4,6 +4,8 @@ import (
 	"log"
 	"strings"
 
+	"github.com/danhale-git/craft/internal/docker"
+
 	"github.com/danhale-git/craft/internal/craft"
 
 	"github.com/spf13/cobra"
@@ -26,7 +28,7 @@ func init() {
 				return err
 			}
 
-			d, err := craft.NewContainer(port, name)
+			d, err := docker.NewContainer(port, name)
 			if err != nil {
 				log.Fatalf("Error running server: %s", err)
 			}

@@ -1,4 +1,4 @@
-package craft
+package docker
 
 import (
 	"archive/tar"
@@ -20,6 +20,13 @@ import (
 
 	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
+)
+
+const (
+	anyIP       = "0.0.0.0"                      // Refers to any/all IPv4 addresses
+	defaultPort = 19132                          // Default port for player connections
+	protocol    = "UDP"                          // MC uses UDP
+	imageName   = "danhaledocker/craftmine:v1.7" // The name of the docker image to use
 )
 
 type DockerClient struct {
@@ -74,7 +81,7 @@ func NewDockerClient(containerName string) (*DockerClient, error) {
 //    docker run -d -e EULA=TRUE -p <HOST_PORT>:19132/udp <IMAGE_NAME>
 func NewContainer(hostPort int, name string) (*DockerClient, error) {
 	if hostPort == 0 {
-		hostPort = NextAvailablePort()
+		hostPort = nextAvailablePort()
 	}
 
 	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
