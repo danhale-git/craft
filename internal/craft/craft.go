@@ -1,12 +1,14 @@
 package craft
 
 import (
+	"archive/zip"
 	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"path"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -124,6 +126,58 @@ func LatestServerBackup(serverName string) (string, *time.Time, error) {
 	}
 
 	return mostRecentFileName, &mostRecentTime, nil
+}
+
+func SaveBackup(d *DockerClient) error {
+	dirPath := d.backupDirectory()
+	fileName := fmt.Sprintf("%s.zip", d.newBackupTimeStamp())
+
+	// Create the directory if it doesn't exist
+	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
+		err = os.MkdirAll(dirPath, 0755)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Create the file
+	f, err := os.Create(path.Join(dirPath, fileName))
+	if err != nil {
+		return err
+	}
+
+	c, err := d.CommandWriter()
+	if err != nil {
+		return err
+	}
+
+	l, err := d.LogReader(0)
+	if err != nil {
+		return err
+	}
+
+	// Copy server files and write as zip data
+	err = d.TakeBackup(f, c, l)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func RestoreLatestBackup(d *DockerClient) error {
+	backupName, _, err := LatestServerBackup(d.ContainerName)
+	if err != nil {
+		return err
+	}
+
+	// Open backup zip
+	zr, err := zip.OpenReader(filepath.Join(d.backupDirectory(), backupName))
+	if err != nil {
+		return err
+	}
+
+	return d.RestoreBackup(zr)
 }
 
 // NextAvailablePort returns the next available port, starting with the default mc port. It checks the first exposed

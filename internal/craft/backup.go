@@ -32,55 +32,7 @@ var craftFiles = []string{
 	serverPropertiesFileName, // server.properties
 }
 
-func SaveBackup(d *DockerClient) error {
-	dirPath := d.backupDirectory()
-	fileName := fmt.Sprintf("%s.zip", d.newBackupTimeStamp())
-
-	// Create the directory if it doesn't exist
-	if _, err := os.Stat(dirPath); os.IsNotExist(err) {
-		err = os.MkdirAll(dirPath, 0755)
-		if err != nil {
-			return err
-		}
-	}
-
-	// Create the file
-	f, err := os.Create(path.Join(dirPath, fileName))
-	if err != nil {
-		return err
-	}
-
-	c, err := d.CommandWriter()
-	if err != nil {
-		return err
-	}
-
-	l, err := d.LogReader(0)
-	if err != nil {
-		return err
-	}
-
-	// Copy server files and write as zip data
-	err = d.takeBackup(f, c, l)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func RestoreLatestBackup(d *DockerClient) error {
-	backupName, _, err := LatestServerBackup(d.ContainerName)
-	if err != nil {
-		return err
-	}
-
-	// Open backup zip
-	zr, err := zip.OpenReader(filepath.Join(d.backupDirectory(), backupName))
-	if err != nil {
-		return err
-	}
-
+func (d *DockerClient) RestoreBackup(zr *zip.ReadCloser) error {
 	// Write zipped files to tar archive
 	for _, f := range zr.File {
 		var data bytes.Buffer
@@ -132,7 +84,7 @@ func RestoreLatestBackup(d *DockerClient) error {
 	return nil
 }
 
-func (d *DockerClient) takeBackup(out, command io.Writer, logs *bufio.Reader) error {
+func (d *DockerClient) TakeBackup(out, command io.Writer, logs *bufio.Reader) error {
 	runCommand := func(cmd string) {
 		_, err := command.Write([]byte(cmd + "\n"))
 		if err != nil {
