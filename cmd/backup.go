@@ -25,7 +25,7 @@ The backed up world is usually a few seconds behind the world state at the time 
 		},
 		// save the world files to a backup archive
 		Run: func(cmd *cobra.Command, args []string) {
-			d := docker.NewDockerClientOrExit(args[0])
+			d := docker.NewContainerOrExit(args[0])
 
 			err := craft.SaveBackup(d)
 			if err != nil {

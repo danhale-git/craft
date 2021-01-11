@@ -23,7 +23,7 @@ Any number of following arguments may be provided as a mc server command.`,
 			containerName := args[0]
 			command := args[1:]
 
-			d := docker.NewDockerClientOrExit(containerName)
+			d := docker.NewContainerOrExit(containerName)
 
 			err := d.Command(command)
 			if err != nil {

@@ -18,7 +18,7 @@ func init() {
 			return cobra.RangeArgs(1, 1)(cmd, args)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			d := docker.NewDockerClientOrExit(args[0])
+			d := docker.NewContainerOrExit(args[0])
 
 			noBackup, err := cmd.Flags().GetBool("no-backup")
 			if err != nil {

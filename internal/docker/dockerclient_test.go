@@ -36,7 +36,7 @@ type (
 )
 
 func TestContainerID(t *testing.T) {
-	d := &DockerClient{ContainerAPIClient: &ContainerListDockerClientMock{}}
+	d := &Container{ContainerAPIClient: &ContainerListDockerClientMock{}}
 
 	for i := 1; i <= 3; i++ {
 		want := fmt.Sprintf("mc%d_ID", i)
@@ -65,7 +65,7 @@ func (m *ContainerListDockerClientMock) ContainerList(_ context.Context, _ types
 
 func TestDockerClient_Command(t *testing.T) {
 	mockClient := &ContainerAttachDockerClientMock{}
-	d := &DockerClient{ContainerAPIClient: mockClient}
+	d := &Container{ContainerAPIClient: mockClient}
 	conn, reader := net.Pipe()
 	mockClient.Conn = conn
 	mockClient.Reader = bufio.NewReader(reader)
@@ -104,7 +104,7 @@ func (m *ContainerAttachDockerClientMock) ContainerAttach(_ context.Context, _ s
 }
 
 func TestDockerClient_LogReader(t *testing.T) {
-	d := &DockerClient{ContainerAPIClient: &ContainerLogsDockerClientMock{}}
+	d := &Container{ContainerAPIClient: &ContainerLogsDockerClientMock{}}
 
 	r, err := d.LogReader(20)
 	if err != nil {

@@ -25,7 +25,7 @@ const (
 )
 
 // RunServer runs RunMCCommand on the given docker client.
-func RunServer(d *docker.DockerClient) error {
+func RunServer(d *docker.Container) error {
 	return d.Command(strings.Split(RunMCCommand, " "))
 }
 
@@ -83,7 +83,7 @@ func LatestServerBackup(serverName string) (string, *time.Time, error) {
 }
 
 // SaveBackup takes a new backup and saves it to the default backup directory.
-func SaveBackup(d *docker.DockerClient) error {
+func SaveBackup(d *docker.Container) error {
 	backupPath := filepath.Join(backupDirectory(), d.ContainerName)
 	fileName := fmt.Sprintf("%s_%s.zip", d.ContainerName, time.Now().Format(BackupFilenameTimeLayout))
 
@@ -112,7 +112,7 @@ func SaveBackup(d *docker.DockerClient) error {
 	}
 
 	// Copy server files and write as zip data
-	err = takeBackup(f, c, l, d.CopyFromTar)
+	err = takeBackup(f, c, l, d.CopyFrom)
 	if err != nil {
 		return err
 	}
@@ -121,7 +121,7 @@ func SaveBackup(d *docker.DockerClient) error {
 }
 
 // RestoreLatestBackup finds the latest backup and restores it to the server.
-func RestoreLatestBackup(d *docker.DockerClient) error {
+func RestoreLatestBackup(d *docker.Container) error {
 	backupPath := filepath.Join(backupDirectory(), d.ContainerName)
 	backupName, _, err := LatestServerBackup(d.ContainerName)
 	if err != nil {
@@ -134,7 +134,7 @@ func RestoreLatestBackup(d *docker.DockerClient) error {
 		return err
 	}
 
-	return restoreBackup(zr, d.CopyToTar)
+	return restoreBackup(zr, d.CopyTo)
 }
 
 func backupDirectory() string {

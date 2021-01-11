@@ -28,7 +28,7 @@ func init() {
 				return err
 			}
 
-			d, err := docker.NewContainer(port, name)
+			d, err := docker.RunContainer(port, name)
 			if err != nil {
 				log.Fatalf("Error running server: %s", err)
 			}

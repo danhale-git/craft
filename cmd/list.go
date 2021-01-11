@@ -30,7 +30,7 @@ func init() {
 			}
 
 			for _, s := range servers {
-				c, err := docker.NewDockerClient(s.ContainerName)
+				c, err := docker.NewContainer(s.ContainerName)
 				if err != nil {
 					log.Fatalf("Error creating docker client for container '%s': %s", s.ContainerName, err)
 				}

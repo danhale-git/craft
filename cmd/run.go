@@ -43,7 +43,7 @@ func init() {
 			}
 
 			// Create a container for the server
-			d, err := docker.NewContainer(port, args[0])
+			d, err := docker.RunContainer(port, args[0])
 			if err != nil {
 				log.Fatalf("Error creating new container: %s", err)
 			}
