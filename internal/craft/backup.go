@@ -32,7 +32,7 @@ var craftFiles = []string{
 	serverPropertiesFileName, // server.properties
 }
 
-func RestoreBackup(d *docker.DockerClient, zr *zip.ReadCloser) error {
+func RestoreBackup(zr *zip.ReadCloser, copyToFunc func(string, *bytes.Buffer) error) error {
 	// Write zipped files to tar archive
 	for _, f := range zr.File {
 		var data bytes.Buffer
@@ -73,7 +73,7 @@ func RestoreBackup(d *docker.DockerClient, zr *zip.ReadCloser) error {
 			return err
 		}
 
-		err = d.CopyToTar(filepath.Join(serverDirectoryPath, dir), &data)
+		err = copyToFunc(filepath.Join(serverDirectoryPath, dir), &data)
 		if err != nil {
 			fmt.Printf("%T", err)
 

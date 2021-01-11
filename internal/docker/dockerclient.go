@@ -16,8 +16,6 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
 
-	"github.com/danhale-git/craft/internal/files"
-
 	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 )
@@ -289,44 +287,6 @@ func (d *DockerClient) CopyToTar(destPath string, tar *bytes.Buffer) error {
 		d.containerID,
 		destPath,
 		tar,
-		docker.CopyToContainerOptions{},
-	)
-	if err != nil {
-		return fmt.Errorf("copying files to '%s': %s", destPath, err)
-	}
-
-	return nil
-}
-
-func (d *DockerClient) copyFrom(containerPath string) (*files.Archive, error) {
-	data, _, err := d.CopyFromContainer(
-		context.Background(),
-		d.containerID,
-		containerPath,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("copying data from server at '%s': %s", containerPath, err)
-	}
-
-	archive, err := files.NewArchiveFromTar(data)
-	if err != nil {
-		return nil, fmt.Errorf("reading tar data from '%s' to file archive: %s", containerPath, err)
-	}
-
-	return archive, nil
-}
-
-func (d *DockerClient) copyTo(destPath string, files *files.Archive) error {
-	t, err := files.Tar()
-	if err != nil {
-		return fmt.Errorf("creating tar archive: %s", err)
-	}
-
-	err = d.CopyToContainer(
-		context.Background(),
-		d.containerID,
-		destPath,
-		t,
 		docker.CopyToContainerOptions{},
 	)
 	if err != nil {

@@ -133,7 +133,7 @@ func RestoreLatestBackup(d *docker.DockerClient) error {
 		return err
 	}
 
-	return RestoreBackup(d, zr)
+	return RestoreBackup(zr, d.CopyToTar)
 }
 
 func backupDirectory() string {
