@@ -1,4 +1,4 @@
-package docker
+package craft
 
 import (
 	"archive/tar"
@@ -12,6 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/danhale-git/craft/internal/docker"
 )
 
 const (
@@ -30,7 +32,7 @@ var craftFiles = []string{
 	serverPropertiesFileName, // server.properties
 }
 
-func (d *DockerClient) RestoreBackup(zr *zip.ReadCloser) error {
+func RestoreBackup(d *docker.DockerClient, zr *zip.ReadCloser) error {
 	// Write zipped files to tar archive
 	for _, f := range zr.File {
 		var data bytes.Buffer
@@ -71,7 +73,7 @@ func (d *DockerClient) RestoreBackup(zr *zip.ReadCloser) error {
 			return err
 		}
 
-		err = d.copyToTar(filepath.Join(serverDirectoryPath, dir), &data)
+		err = d.CopyToTar(filepath.Join(serverDirectoryPath, dir), &data)
 		if err != nil {
 			fmt.Printf("%T", err)
 
@@ -82,7 +84,7 @@ func (d *DockerClient) RestoreBackup(zr *zip.ReadCloser) error {
 	return nil
 }
 
-func (d *DockerClient) TakeBackup(out, command io.Writer, logs *bufio.Reader) error {
+func TakeBackup(d *docker.DockerClient, out, command io.Writer, logs *bufio.Reader) error {
 	runCommand := func(cmd string) {
 		_, err := command.Write([]byte(cmd + "\n"))
 		if err != nil {
@@ -139,7 +141,7 @@ func (d *DockerClient) TakeBackup(out, command io.Writer, logs *bufio.Reader) er
 			// files needed by craft
 			files = append(files, craftFiles...)
 
-			if err := d.copyBackupFiles(files, out); err != nil {
+			if err := copyBackupFiles(d, files, out); err != nil {
 				return fmt.Errorf("copying files from container to disk: %s", err)
 			}
 
@@ -159,12 +161,12 @@ func (d *DockerClient) TakeBackup(out, command io.Writer, logs *bufio.Reader) er
 	return fmt.Errorf("exceeded %d retries of the 'save query' command", saveQueryRetries)
 }
 
-func (d *DockerClient) copyBackupFiles(filePaths []string, out io.Writer) error {
+func copyBackupFiles(d *docker.DockerClient, filePaths []string, out io.Writer) error {
 	// Write zip data to out file
 	zw := zip.NewWriter(out)
 
 	for _, p := range filePaths {
-		tr, err := d.copyFromTar(filepath.Join(serverDirectoryPath, p))
+		tr, err := d.CopyFromTar(filepath.Join(serverDirectoryPath, p))
 		if err != nil {
 			return err
 		}
@@ -208,7 +210,7 @@ func (d *DockerClient) copyBackupFiles(filePaths []string, out io.Writer) error 
 	return nil
 }
 
-func (d *DockerClient) NewBackupTimeStamp() string {
+func NewBackupTimeStamp(d *docker.DockerClient) string {
 	return fmt.Sprintf("%s_%s",
 		d.ContainerName,
 		time.Now().Format(BackupFilenameTimeLayout),

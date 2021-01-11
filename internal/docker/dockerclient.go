@@ -270,7 +270,7 @@ func (d *DockerClient) GetPort() (int, error) {
 	return port, nil
 }
 
-func (d *DockerClient) copyFromTar(containerPath string) (*tar.Reader, error) {
+func (d *DockerClient) CopyFromTar(containerPath string) (*tar.Reader, error) {
 	data, _, err := d.CopyFromContainer(
 		context.Background(),
 		d.containerID,
@@ -283,7 +283,7 @@ func (d *DockerClient) copyFromTar(containerPath string) (*tar.Reader, error) {
 	return tar.NewReader(data), nil
 }
 
-func (d *DockerClient) copyToTar(destPath string, tar *bytes.Buffer) error {
+func (d *DockerClient) CopyToTar(destPath string, tar *bytes.Buffer) error {
 	err := d.CopyToContainer(
 		context.Background(),
 		d.containerID,

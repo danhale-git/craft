@@ -66,7 +66,7 @@ func LatestServerBackup(serverName string) (string, *time.Time, error) {
 			backupTime := strings.Replace(name, prefix, "", 1)
 			backupTime = strings.Split(backupTime, ".")[0]
 
-			t, err := time.Parse(docker.BackupFilenameTimeLayout, backupTime)
+			t, err := time.Parse(BackupFilenameTimeLayout, backupTime)
 			if err != nil {
 				return "", nil, fmt.Errorf("parsing time from file name '%s': %s", name, err)
 			}
@@ -84,7 +84,7 @@ func LatestServerBackup(serverName string) (string, *time.Time, error) {
 // SaveBackup takes a new backup and saves it to the default backup directory.
 func SaveBackup(d *docker.DockerClient) error {
 	backupPath := filepath.Join(backupDirectory(), d.ContainerName)
-	fileName := fmt.Sprintf("%s.zip", d.NewBackupTimeStamp())
+	fileName := fmt.Sprintf("%s.zip", NewBackupTimeStamp(d))
 
 	// Create the directory if it doesn't exist
 	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
@@ -111,7 +111,7 @@ func SaveBackup(d *docker.DockerClient) error {
 	}
 
 	// Copy server files and write as zip data
-	err = d.TakeBackup(f, c, l)
+	err = TakeBackup(d, f, c, l)
 	if err != nil {
 		return err
 	}
@@ -133,7 +133,7 @@ func RestoreLatestBackup(d *docker.DockerClient) error {
 		return err
 	}
 
-	return d.RestoreBackup(zr)
+	return RestoreBackup(d, zr)
 }
 
 func backupDirectory() string {
