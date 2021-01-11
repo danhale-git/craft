@@ -18,7 +18,8 @@ import (
 
 // Run the bedrock_server executable
 const (
-	backupDirName = "craft_backups" // Name of the local directory where backups are stored
+	backupDirName            = "craft_backups"    // Name of the local directory where backups are stored
+	BackupFilenameTimeLayout = "02-01-2006_15-04" // The format of the file timestamp for the Go time package formatter
 
 	RunMCCommand = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server"
 )
@@ -84,7 +85,7 @@ func LatestServerBackup(serverName string) (string, *time.Time, error) {
 // SaveBackup takes a new backup and saves it to the default backup directory.
 func SaveBackup(d *docker.DockerClient) error {
 	backupPath := filepath.Join(backupDirectory(), d.ContainerName)
-	fileName := fmt.Sprintf("%s.zip", NewBackupTimeStamp(d))
+	fileName := fmt.Sprintf("%s_%s.zip", d.ContainerName, time.Now().Format(BackupFilenameTimeLayout))
 
 	// Create the directory if it doesn't exist
 	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
@@ -111,7 +112,7 @@ func SaveBackup(d *docker.DockerClient) error {
 	}
 
 	// Copy server files and write as zip data
-	err = TakeBackup(d, f, c, l)
+	err = takeBackup(f, c, l, d.CopyFromTar)
 	if err != nil {
 		return err
 	}
@@ -119,7 +120,7 @@ func SaveBackup(d *docker.DockerClient) error {
 	return nil
 }
 
-// RestoreBackup finds the latest backup and restores it to the server.
+// RestoreLatestBackup finds the latest backup and restores it to the server.
 func RestoreLatestBackup(d *docker.DockerClient) error {
 	backupPath := filepath.Join(backupDirectory(), d.ContainerName)
 	backupName, _, err := LatestServerBackup(d.ContainerName)
@@ -133,7 +134,7 @@ func RestoreLatestBackup(d *docker.DockerClient) error {
 		return err
 	}
 
-	return RestoreBackup(zr, d.CopyToTar)
+	return restoreBackup(zr, d.CopyToTar)
 }
 
 func backupDirectory() string {
