@@ -35,23 +35,6 @@ type (
 	}
 )
 
-func TestContainerID(t *testing.T) {
-	d := &Container{ContainerAPIClient: &ContainerListDockerClientMock{}}
-
-	for i := 1; i <= 3; i++ {
-		want := fmt.Sprintf("mc%d_ID", i)
-		got, err := ContainerID(fmt.Sprintf("mc%d", i), d)
-
-		if err != nil {
-			t.Errorf("error returned for valid input: %s", err)
-		}
-
-		if got != want {
-			t.Errorf("want: %s got: %s", want, got)
-		}
-	}
-}
-
 //nolint:lll // mock method
 func (m *ContainerListDockerClientMock) ContainerList(_ context.Context, _ types.ContainerListOptions) ([]types.Container, error) {
 	containers := []types.Container{
@@ -63,7 +46,7 @@ func (m *ContainerListDockerClientMock) ContainerList(_ context.Context, _ types
 	return containers, nil
 }
 
-func TestDockerClient_Command(t *testing.T) {
+func TestContainer_Command(t *testing.T) {
 	mockClient := &ContainerAttachDockerClientMock{}
 	d := &Container{ContainerAPIClient: mockClient}
 	conn, reader := net.Pipe()
@@ -103,7 +86,7 @@ func (m *ContainerAttachDockerClientMock) ContainerAttach(_ context.Context, _ s
 	return rw, nil
 }
 
-func TestDockerClient_LogReader(t *testing.T) {
+func TestContainer_LogReader(t *testing.T) {
 	d := &Container{ContainerAPIClient: &ContainerLogsDockerClientMock{}}
 
 	r, err := d.LogReader(20)

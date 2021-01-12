@@ -24,13 +24,14 @@ const (
 	imageName   = "danhaledocker/craftmine:v1.7" // The name of the docker image to use
 )
 
+// Container is a docker client which operates on an existing container.
 type Container struct {
 	client.ContainerAPIClient
 	ContainerName, containerID string
 }
 
-// NewContainerOrExit is a convenience function for attempting to find a docker client with the given name. If not
-// found, a helpful error message is printed and the program exits without error.
+// NewContainerOrExit is a convenience function for attempting to find an existing docker container with the given name.
+// If not found, a helpful error message is printed and the program exits without error.
 func NewContainerOrExit(containerName string) *Container {
 	d, err := NewContainer(containerName)
 
@@ -48,8 +49,8 @@ func NewContainerOrExit(containerName string) *Container {
 	return d
 }
 
-// NewContainer returns a new default Docker Container API client. If the given container name doesn't exist an error
-// of type ContainerNotFoundError is returned.
+// NewContainer returns a new default docker container API client for an existing container. If the given container name
+// doesn't exist an error of type ContainerNotFoundError is returned.
 func NewContainer(containerName string) (*Container, error) {
 	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
@@ -70,6 +71,7 @@ func NewContainer(containerName string) (*Container, error) {
 	return &d, nil
 }
 
+// CopyFrom returns a tar archive containing the file(s) at the given container path.
 func (d *Container) CopyFrom(containerPath string) (*tar.Reader, error) {
 	data, _, err := d.CopyFromContainer(
 		context.Background(),
@@ -83,6 +85,7 @@ func (d *Container) CopyFrom(containerPath string) (*tar.Reader, error) {
 	return tar.NewReader(data), nil
 }
 
+// CopyTo copies the given tar data to the destination path in the container.
 func (d *Container) CopyTo(destPath string, tar *bytes.Buffer) error {
 	err := d.CopyToContainer(
 		context.Background(),
