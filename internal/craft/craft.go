@@ -11,6 +11,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/danhale-git/craft/internal/backup"
+
 	"github.com/danhale-git/craft/internal/docker"
 
 	"github.com/mitchellh/go-homedir"
@@ -112,7 +114,7 @@ func SaveBackup(d *docker.Container) error {
 	}
 
 	// Copy server files and write as zip data
-	err = takeBackup(f, c, l, d.CopyFrom)
+	err = backup.TakeBackup(f, c, l, d.CopyFrom)
 	if err != nil {
 		return err
 	}
@@ -134,7 +136,15 @@ func RestoreLatestBackup(d *docker.Container) error {
 		return err
 	}
 
-	return restoreBackup(zr, d.CopyTo)
+	if err = backup.RestoreBackup(&zr.Reader, d.CopyTo); err != nil {
+		return err
+	}
+
+	if err = zr.Close(); err != nil {
+		return fmt.Errorf("closing zip: %s", err)
+	}
+
+	return nil
 }
 
 func backupDirectory() string {

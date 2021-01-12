@@ -1,4 +1,4 @@
-package craft
+package backup
 
 import (
 	"archive/tar"
@@ -23,24 +23,68 @@ const (
 	saveQueryDelayMS = 100 // The delay between save query retries, in milliseconds
 )
 
-// files backed up for Craft
-var craftFiles = []string{
+// serverFiles is a collection of files needed by craft to return the server to its previous state.
+var serverFiles = []string{
 	serverPropertiesFileName, // server.properties
 }
 
-func backupFilePaths(saveQueryResponseFiles string) []string {
-	// Files needed by mc server
-	files := strings.Split(saveQueryResponseFiles, ", ")
-	for i, f := range files {
-		files[i] = filepath.Join(worldsDirectoryName, strings.Split(f, ":")[0])
+// RestoreBackup reads from the given zip.ReadCloser, copying each of the files to the directory containing the server
+// files.
+func RestoreBackup(zr *zip.Reader, copyToFunc func(string, *bytes.Buffer) error) error {
+	// Write zipped files to tar archive
+	for _, f := range zr.File {
+		var data bytes.Buffer
+		tw := tar.NewWriter(&data)
+
+		file, err := f.Open()
+		if err != nil {
+			return err
+		}
+
+		b, err := ioutil.ReadAll(file)
+		if err != nil {
+			return err
+		}
+
+		// Create tar file
+		name := filepath.Base(f.Name)
+		dir := filepath.Dir(f.Name)
+
+		hdr := &tar.Header{
+			Name: name,
+			Size: int64(len(b)),
+		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return err
+		}
+
+		if _, err := tw.Write(b); err != nil {
+			return err
+		}
+
+		// Close zipped file and tar writer
+		if err = file.Close(); err != nil {
+			return err
+		}
+
+		if err = tw.Close(); err != nil {
+			return err
+		}
+
+		err = copyToFunc(filepath.Join(serverDirectoryPath, dir), &data)
+		if err != nil {
+			return err
+		}
 	}
 
-	// Files needed by craft
-	return append(files, craftFiles...)
+	return nil
 }
 
-func takeBackup(out, command io.Writer, logs *bufio.Reader, copyFromFunc func(string) (*tar.Reader, error)) error {
-	// $ save hold
+// TakeBackup runs the set of queries described in the bedrock server documentation for taking a backup without server
+// interruption. All files needed for server and world persistence are copied from the server to a local zip file. The
+// paths in the zip file extend to the server directory root.
+func TakeBackup(out, command io.Writer, logs *bufio.Reader, copyFromFunc func(string) (*tar.Reader, error)) error {
+	// `save hold`
 	runCommand("save hold", command, logs)
 
 	saveHoldResponse := readLine(logs)
@@ -52,18 +96,24 @@ func takeBackup(out, command io.Writer, logs *bufio.Reader, copyFromFunc func(st
 	for i := 0; i < saveQueryRetries; i++ {
 		time.Sleep(saveQueryDelayMS * time.Millisecond)
 
-		// $ save query
+		// `save query`
 		runCommand("save query", command, logs)
 
-		saveQueryResponseOne := readLine(logs)
+		saveQueryResponse := readLine(logs)
 
 		// Ready for backup
-		if strings.HasPrefix(saveQueryResponseOne, "Data saved. Files are now ready to be copied.") {
+		if strings.HasPrefix(saveQueryResponse, "Data saved. Files are now ready to be copied.") {
 			// Write zip data to out file
 			zw := zip.NewWriter(out)
 
-			saveQueryResponseFiles := readLine(logs)
-			for _, p := range backupFilePaths(saveQueryResponseFiles) {
+			worldFilesString := readLine(logs)
+			// Files needed by mc server
+			worldFiles := strings.Split(worldFilesString, ", ")
+			for i, f := range worldFiles {
+				worldFiles[i] = filepath.Join(worldsDirectoryName, strings.Split(f, ":")[0])
+			}
+
+			for _, p := range append(worldFiles, serverFiles...) {
 				tr, err := copyFromFunc(filepath.Join(serverDirectoryPath, p))
 				if err != nil {
 					return err
@@ -80,7 +130,7 @@ func takeBackup(out, command io.Writer, logs *bufio.Reader, copyFromFunc func(st
 				return err
 			}
 
-			// $ save resume
+			// `save resume`
 			runCommand("save resume", command, logs)
 
 			saveResumeResponse := readLine(logs)
@@ -98,19 +148,19 @@ func takeBackup(out, command io.Writer, logs *bufio.Reader, copyFromFunc func(st
 func runCommand(cmd string, cli io.Writer, logs *bufio.Reader) {
 	_, err := cli.Write([]byte(cmd + "\n"))
 	if err != nil {
-		log.Fatalf("running command `%s`: %s", cmd, err)
+		log.Fatalf("backup.go: running command `%s`: %s", cmd, err)
 	}
 
 	// Read command echo to discard it
 	if _, err := logs.ReadString('\n'); err != nil {
-		log.Fatalf("retrieving echo for command `%s`: %s", cmd, err)
+		log.Fatalf("backup.go: retrieving echo for command `%s`: %s", cmd, err)
 	}
 }
 
 func readLine(logs *bufio.Reader) string {
 	res, err := logs.ReadString('\n')
 	if err != nil {
-		log.Fatalf("reading logs: %s", err)
+		log.Fatalf("backup.go: reading logs: %s", err)
 	}
 
 	return res
@@ -144,58 +194,6 @@ func addTarToZip(path string, tr *tar.Reader, zw *zip.Writer) error {
 		_, err = f.Write(b)
 		if err != nil {
 			log.Fatal(err)
-		}
-	}
-
-	return nil
-}
-
-func restoreBackup(zr *zip.ReadCloser, copyToFunc func(string, *bytes.Buffer) error) error {
-	// Write zipped files to tar archive
-	for _, f := range zr.File {
-		var data bytes.Buffer
-		tw := tar.NewWriter(&data)
-
-		file, err := f.Open()
-		if err != nil {
-			return err
-		}
-
-		b, err := ioutil.ReadAll(file)
-		if err != nil {
-			return err
-		}
-
-		// Create tar file
-		name := filepath.Base(f.Name)
-		dir := filepath.Dir(f.Name)
-
-		hdr := &tar.Header{
-			Name: name,
-			Size: int64(len(b)),
-		}
-		if err := tw.WriteHeader(hdr); err != nil {
-			log.Fatal(err)
-		}
-
-		if _, err := tw.Write(b); err != nil {
-			log.Fatal(err)
-		}
-
-		// Close zip file and tar writer
-		if err = file.Close(); err != nil {
-			return err
-		}
-
-		if err = tw.Close(); err != nil {
-			return err
-		}
-
-		err = copyToFunc(filepath.Join(serverDirectoryPath, dir), &data)
-		if err != nil {
-			fmt.Printf("%T", err)
-
-			return err
 		}
 	}
 
