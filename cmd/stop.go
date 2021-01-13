@@ -5,7 +5,6 @@ import (
 
 	"github.com/danhale-git/craft/internal/docker"
 
-	"github.com/danhale-git/craft/internal/craft"
 	"github.com/spf13/cobra"
 )
 
@@ -27,7 +26,7 @@ func init() {
 
 			// Attempt to back up the server unless instructed otherwise.
 			if !noBackup {
-				err := craft.SaveBackup(d)
+				err = copyBackup(d)
 				if err != nil {
 					log.Fatalf("Error taking backup: %s", err)
 				}

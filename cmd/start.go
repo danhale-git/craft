@@ -4,9 +4,9 @@ import (
 	"log"
 	"strings"
 
-	"github.com/danhale-git/craft/internal/docker"
+	"github.com/danhale-git/craft/internal/backup"
 
-	"github.com/danhale-git/craft/internal/craft"
+	"github.com/danhale-git/craft/internal/docker"
 
 	"github.com/spf13/cobra"
 )
@@ -33,15 +33,19 @@ func init() {
 				log.Fatalf("Error running server: %s", err)
 			}
 
-			err = craft.RestoreLatestBackup(d)
+			backupName, _, err := backup.LatestFile(d.ContainerName)
 			if err != nil {
-				log.Fatalf("loading backup file to server: %s", err)
+				log.Fatalf("Error getting latest file name: %s", err)
+			}
+
+			err = restoreBackup(d, backupName)
+			if err != nil {
+				log.Fatalf("Error loading backup file to server: %s", err)
 			}
 
 			// Run the bedrock_server process
-			err = d.Command(strings.Split(craft.RunMCCommand, " "))
-			if err != nil {
-				log.Fatalf("starting mc server process: %s", err)
+			if err = d.Command(strings.Split(RunMCCommand, " ")); err != nil {
+				log.Fatalf("Error executing server start command: %s", err)
 			}
 
 			return nil

@@ -20,7 +20,7 @@ func TestRestoreBackup(t *testing.T) {
 	// zip data and count of zipped files
 	z, want := mockZip()
 
-	if err := RestoreBackup(z, copyToFunc); err != nil {
+	if err := Restore(z, copyToFunc); err != nil {
 		t.Errorf("error returned when calling with valid input: %s", err)
 	}
 
@@ -95,7 +95,7 @@ Changes to the level are resumed.
 
 	bytes.NewBuffer([]byte{})
 
-	err := TakeBackup(
+	err := Copy(
 		bytes.NewBuffer([]byte{}),
 		bytes.NewBuffer([]byte{}),
 		bufio.NewReader(logs),

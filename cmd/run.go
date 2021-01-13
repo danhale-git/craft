@@ -5,12 +5,15 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/danhale-git/craft/internal/docker"
 
-	"github.com/danhale-git/craft/internal/craft"
-
 	"github.com/spf13/cobra"
+)
+
+const (
+	RunMCCommand = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server"
 )
 
 func init() {
@@ -25,7 +28,7 @@ func init() {
 		},
 		// Create a new docker container, copy files and run the mc server binary
 		RunE: func(cmd *cobra.Command, args []string) error {
-			backups, err := craft.BackupServerNames()
+			backups, err := backupServerNames()
 			if err != nil {
 				log.Fatalf("Error getting backups: %s", err)
 			}
@@ -128,7 +131,10 @@ func init() {
 				}
 			}()
 
-			err = craft.RunServer(d)
+			// Run the bedrock_server process
+			if err = d.Command(strings.Split(RunMCCommand, " ")); err != nil {
+				log.Fatalf("Error executing server start command: %s", err)
+			}
 
 			return nil
 		},

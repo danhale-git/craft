@@ -9,9 +9,13 @@ import (
 	"io"
 	"io/ioutil"
 	"log"
+	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/mitchellh/go-homedir"
 )
 
 const (
@@ -21,6 +25,10 @@ const (
 
 	saveQueryRetries = 100 // The number of times save query can run without the expected response
 	saveQueryDelayMS = 100 // The delay between save query retries, in milliseconds
+
+	backupDirName      = "craft_backups"    // Name of the local directory where backups are stored
+	FileNameTimeLayout = "02-01-2006_15-04" // The format of the file timestamp for the Go time package formatter
+
 )
 
 // serverFiles is a collection of files needed by craft to return the server to its previous state.
@@ -28,9 +36,66 @@ var serverFiles = []string{
 	serverPropertiesFileName, // server.properties
 }
 
-// RestoreBackup reads from the given zip.ReadCloser, copying each of the files to the directory containing the server
+// Directory returns the path to the directory where backup files are saved.
+func Directory() string {
+	// Find home directory.
+	home, err := homedir.Dir()
+	if err != nil {
+		log.Fatalf("getting home directory: %s", err)
+	}
+
+	backupDir := path.Join(home, backupDirName)
+
+	// Create directory if it doesn't exist
+	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
+		err = os.MkdirAll(backupDir, 0755)
+		if err != nil {
+			log.Fatalf("checking backup directory exists: %s", err)
+		}
+	}
+
+	return backupDir
+}
+
+// LatestFile returns the name and backup time of the latest backup file from a slice of standard FileInfos.
+func LatestFile(serverName string) (string, *time.Time, error) {
+	backupDir := Directory()
+	infos, err := ioutil.ReadDir(path.Join(backupDir, serverName))
+
+	if err != nil {
+		return "", nil, fmt.Errorf("reading directory '%s': %s", backupDir, err)
+	}
+
+	var mostRecentTime time.Time
+
+	var mostRecentFileName string
+
+	for _, f := range infos {
+		name := f.Name()
+
+		prefix := fmt.Sprintf("%s_", serverName)
+		if strings.HasPrefix(name, prefix) {
+			backupTime := strings.Replace(name, prefix, "", 1)
+			backupTime = strings.Split(backupTime, ".")[0]
+
+			t, err := time.Parse(FileNameTimeLayout, backupTime)
+			if err != nil {
+				return "", nil, fmt.Errorf("parsing time from file name '%s': %s", name, err)
+			}
+
+			if t.After(mostRecentTime) {
+				mostRecentTime = t
+				mostRecentFileName = name
+			}
+		}
+	}
+
+	return mostRecentFileName, &mostRecentTime, nil
+}
+
+// Restore reads from the given zip.ReadCloser, copying each of the files to the directory containing the server
 // files.
-func RestoreBackup(zr *zip.Reader, copyToFunc func(string, *bytes.Buffer) error) error {
+func Restore(zr *zip.Reader, copyToFunc func(string, *bytes.Buffer) error) error {
 	// Write zipped files to tar archive
 	for _, f := range zr.File {
 		var data bytes.Buffer
@@ -80,10 +145,10 @@ func RestoreBackup(zr *zip.Reader, copyToFunc func(string, *bytes.Buffer) error)
 	return nil
 }
 
-// TakeBackup runs the set of queries described in the bedrock server documentation for taking a backup without server
+// Copy runs the set of queries described in the bedrock server documentation for taking a backup without server
 // interruption. All files needed for server and world persistence are copied from the server to a local zip file. The
 // paths in the zip file extend to the server directory root.
-func TakeBackup(out, command io.Writer, logs *bufio.Reader, copyFromFunc func(string) (*tar.Reader, error)) error {
+func Copy(out, command io.Writer, logs *bufio.Reader, copyFunc func(string) (*tar.Reader, error)) error {
 	// `save hold`
 	runCommand("save hold", command, logs)
 
@@ -114,7 +179,7 @@ func TakeBackup(out, command io.Writer, logs *bufio.Reader, copyFromFunc func(st
 			}
 
 			for _, p := range append(worldFiles, serverFiles...) {
-				tr, err := copyFromFunc(filepath.Join(serverDirectoryPath, p))
+				tr, err := copyFunc(filepath.Join(serverDirectoryPath, p))
 				if err != nil {
 					return err
 				}
