@@ -4,8 +4,6 @@ import (
 	"log"
 	"strings"
 
-	"github.com/danhale-git/craft/internal/backup"
-
 	"github.com/danhale-git/craft/internal/docker"
 
 	"github.com/spf13/cobra"
@@ -33,7 +31,7 @@ func init() {
 				log.Fatalf("Error running server: %s", err)
 			}
 
-			backupName, _, err := backup.LatestFile(d.ContainerName)
+			backupName, _, err := latestFile(d.ContainerName)
 			if err != nil {
 				log.Fatalf("Error getting latest file name: %s", err)
 			}

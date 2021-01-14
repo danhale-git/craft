@@ -7,8 +7,6 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"github.com/danhale-git/craft/internal/backup"
-
 	"github.com/danhale-git/craft/internal/docker"
 
 	"github.com/spf13/cobra"
@@ -80,7 +78,7 @@ func init() {
 					continue
 				}
 
-				_, t, err := backup.LatestFile(n)
+				_, t, err := latestFile(n)
 				if err != nil {
 					log.Fatalf("Error getting latest backup: %s", err)
 				}
@@ -103,7 +101,7 @@ func init() {
 
 // backupServerNames returns a slice with the names of all backed up servers.
 func backupServerNames() ([]string, error) {
-	backupDir := backup.Directory()
+	backupDir := backupDirectory()
 	infos, err := ioutil.ReadDir(backupDir)
 
 	if err != nil {

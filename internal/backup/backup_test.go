@@ -9,7 +9,7 @@ import (
 	"testing"
 )
 
-func TestRestoreBackup(t *testing.T) {
+func TestRestore(t *testing.T) {
 	got := 0
 	copyToFunc := func(string, *bytes.Buffer) error {
 		// count the number of files copies
@@ -72,7 +72,7 @@ func mockZip() (*zip.Reader, int) {
 	return r, len(files)
 }
 
-func TestTakeBackup(t *testing.T) {
+func TestCopy(t *testing.T) {
 	// file list in the string literal below has 8 paths
 	want := 8 + len(serverFiles)
 	got := 0

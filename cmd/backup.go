@@ -3,17 +3,26 @@ package cmd
 import (
 	"archive/zip"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"time"
+
+	"github.com/mitchellh/go-homedir"
 
 	"github.com/danhale-git/craft/internal/backup"
 
 	"github.com/danhale-git/craft/internal/docker"
 
 	"github.com/spf13/cobra"
+)
+
+const (
+	backupDirName      = "craft_backups"    // Name of the local directory where backups are stored
+	FileNameTimeLayout = "02-01-2006_15-04" // The format of the file timestamp for the Go time package formatter
 )
 
 // backupCmd represents the backup command
@@ -44,9 +53,64 @@ The backed up world is usually a few seconds behind the world state at the time 
 	rootCmd.AddCommand(backupCmd)
 }
 
+func backupDirectory() string {
+	// Find home directory.
+	home, err := homedir.Dir()
+	if err != nil {
+		log.Fatalf("getting home directory: %s", err)
+	}
+
+	backupDir := path.Join(home, backupDirName)
+
+	// Create directory if it doesn't exist
+	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
+		err = os.MkdirAll(backupDir, 0755)
+		if err != nil {
+			log.Fatalf("checking backup directory exists: %s", err)
+		}
+	}
+
+	return backupDir
+}
+
+func latestFile(serverName string) (string, *time.Time, error) {
+	backupDir := backupDirectory()
+	infos, err := ioutil.ReadDir(path.Join(backupDir, serverName))
+
+	if err != nil {
+		return "", nil, fmt.Errorf("reading directory '%s': %s", backupDir, err)
+	}
+
+	var mostRecentTime time.Time
+
+	var mostRecentFileName string
+
+	for _, f := range infos {
+		name := f.Name()
+
+		prefix := fmt.Sprintf("%s_", serverName)
+		if strings.HasPrefix(name, prefix) {
+			backupTime := strings.Replace(name, prefix, "", 1)
+			backupTime = strings.Split(backupTime, ".")[0]
+
+			t, err := time.Parse(FileNameTimeLayout, backupTime)
+			if err != nil {
+				return "", nil, fmt.Errorf("parsing time from file name '%s': %s", name, err)
+			}
+
+			if t.After(mostRecentTime) {
+				mostRecentTime = t
+				mostRecentFileName = name
+			}
+		}
+	}
+
+	return mostRecentFileName, &mostRecentTime, nil
+}
+
 func copyBackup(d *docker.Container) error {
-	backupPath := filepath.Join(backup.Directory(), d.ContainerName)
-	fileName := fmt.Sprintf("%s_%s.zip", d.ContainerName, time.Now().Format(backup.FileNameTimeLayout))
+	backupPath := filepath.Join(backupDirectory(), d.ContainerName)
+	fileName := fmt.Sprintf("%s_%s.zip", d.ContainerName, time.Now().Format(FileNameTimeLayout))
 
 	// Create the directory if it doesn't exist
 	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
@@ -85,7 +149,7 @@ func copyBackup(d *docker.Container) error {
 
 // RestoreLatestBackup finds the latest backup and restores it to the server.
 func restoreBackup(d *docker.Container, backupName string) error {
-	backupPath := filepath.Join(backup.Directory(), d.ContainerName)
+	backupPath := filepath.Join(backupDirectory(), d.ContainerName)
 
 	// Open backup zip
 	zr, err := zip.OpenReader(filepath.Join(backupPath, backupName))
