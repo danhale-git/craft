@@ -21,11 +21,44 @@ const (
 
 	saveQueryRetries = 100 // The number of times save query can run without the expected response
 	saveQueryDelayMS = 100 // The delay between save query retries, in milliseconds
+
+	FileNameTimeLayout = "02-01-2006_15-04" // The format of the file timestamp for the Go time package formatter
 )
 
 // serverFiles is a collection of files needed by craft to return the server to its previous state.
 var serverFiles = []string{
 	serverPropertiesFileName, // server.properties
+}
+
+func MostRecentFileName(serverName string, fileInfoNames []string) (string, *time.Time, error) {
+	var mostRecentTime time.Time
+
+	var mostRecentFileName string
+
+	for _, n := range fileInfoNames {
+		prefix := fmt.Sprintf("%s_", serverName)
+		if strings.HasPrefix(n, prefix) {
+			backupTime := strings.Replace(n, prefix, "", 1)
+			backupTime = strings.Split(backupTime, ".")[0]
+
+			t, err := time.Parse(FileNameTimeLayout, backupTime)
+			if err != nil {
+				if _, ok := err.(*time.ParseError); ok {
+					fmt.Printf("Warning: skipping file '%s': %s\n", n, err)
+					continue
+				}
+
+				return "", nil, fmt.Errorf("parsing time from file name '%s': %s", n, err)
+			}
+
+			if t.After(mostRecentTime) {
+				mostRecentTime = t
+				mostRecentFileName = n
+			}
+		}
+	}
+
+	return mostRecentFileName, &mostRecentTime, nil
 }
 
 // Restore reads from the given zip.ReadCloser, copying each of the files to the directory containing the server

@@ -9,6 +9,36 @@ import (
 	"testing"
 )
 
+func TestMostRecentFileName(t *testing.T) {
+	files := []string{"test_11-01-2021_17-01.zip",
+		"test_11-01-2021_17-02.zip",
+		"test_11-01-2021_17-03.zip",
+		"test_11-01-2021_17-04.zip",
+		"test_11-01-2021_17-05.zip",
+		"test_11-01-2021_17-06.zip",
+		"test_12-01-2021_17-07.zip",
+		"test_13-01-2021_17-08.zip",
+	}
+
+	want := files[len(files)-1]
+
+	got, _, err := MostRecentFileName("test", files)
+	if err != nil {
+		t.Fatalf("error returned for valid input: %s", err)
+	}
+
+	if got != want {
+		t.Errorf("incorrect value returned: want %s: got %s", want, got)
+	}
+
+	files[0] = "test_non_standard_file_name"
+
+	got, _, err = MostRecentFileName("test", files)
+	if err != nil {
+		t.Errorf("error returned when invalid file is present: %s", err)
+	}
+}
+
 func TestRestore(t *testing.T) {
 	got := 0
 	copyToFunc := func(string, *bytes.Buffer) error {

@@ -78,7 +78,7 @@ func init() {
 					continue
 				}
 
-				_, t, err := latestFile(n)
+				_, t, err := latestBackupFileName(n)
 				if err != nil {
 					log.Fatalf("Error getting latest backup: %s", err)
 				}

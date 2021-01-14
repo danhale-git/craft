@@ -31,7 +31,7 @@ func init() {
 				log.Fatalf("Error running server: %s", err)
 			}
 
-			backupName, _, err := latestFile(d.ContainerName)
+			backupName, _, err := latestBackupFileName(d.ContainerName)
 			if err != nil {
 				log.Fatalf("Error getting latest file name: %s", err)
 			}

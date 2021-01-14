@@ -8,7 +8,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/mitchellh/go-homedir"
@@ -21,8 +20,7 @@ import (
 )
 
 const (
-	backupDirName      = "craft_backups"    // Name of the local directory where backups are stored
-	FileNameTimeLayout = "02-01-2006_15-04" // The format of the file timestamp for the Go time package formatter
+	backupDirName = "craft_backups" // Name of the local directory where backups are stored
 )
 
 // backupCmd represents the backup command
@@ -73,44 +71,25 @@ func backupDirectory() string {
 	return backupDir
 }
 
-func latestFile(serverName string) (string, *time.Time, error) {
+func latestBackupFileName(serverName string) (string, *time.Time, error) {
 	backupDir := backupDirectory()
-	infos, err := ioutil.ReadDir(path.Join(backupDir, serverName))
 
+	infos, err := ioutil.ReadDir(path.Join(backupDir, serverName))
 	if err != nil {
 		return "", nil, fmt.Errorf("reading directory '%s': %s", backupDir, err)
 	}
 
-	var mostRecentTime time.Time
-
-	var mostRecentFileName string
-
-	for _, f := range infos {
-		name := f.Name()
-
-		prefix := fmt.Sprintf("%s_", serverName)
-		if strings.HasPrefix(name, prefix) {
-			backupTime := strings.Replace(name, prefix, "", 1)
-			backupTime = strings.Split(backupTime, ".")[0]
-
-			t, err := time.Parse(FileNameTimeLayout, backupTime)
-			if err != nil {
-				return "", nil, fmt.Errorf("parsing time from file name '%s': %s", name, err)
-			}
-
-			if t.After(mostRecentTime) {
-				mostRecentTime = t
-				mostRecentFileName = name
-			}
-		}
+	names := make([]string, len(infos))
+	for i := 0; i < len(infos); i++ {
+		names[i] = infos[i].Name()
 	}
 
-	return mostRecentFileName, &mostRecentTime, nil
+	return backup.MostRecentFileName(serverName, names)
 }
 
 func copyBackup(d *docker.Container) error {
 	backupPath := filepath.Join(backupDirectory(), d.ContainerName)
-	fileName := fmt.Sprintf("%s_%s.zip", d.ContainerName, time.Now().Format(FileNameTimeLayout))
+	fileName := fmt.Sprintf("%s_%s.zip", d.ContainerName, time.Now().Format(backup.FileNameTimeLayout))
 
 	// Create the directory if it doesn't exist
 	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
