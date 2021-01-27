@@ -160,7 +160,7 @@ func (d *Container) Stop() error {
 }
 
 // LogReader returns a buffer with the stdout and stderr from the running mc server process. New output will continually
-// be sent to the buffer.
+// be sent to the buffer. A negative tail value will result in the 'all' value being used.
 func (d *Container) LogReader(tail int) (*bufio.Reader, error) {
 	logs, err := d.ContainerLogs(
 		context.Background(),

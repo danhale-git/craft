@@ -90,6 +90,7 @@ func latestBackupFileName(serverName string) (string, *time.Time, error) {
 func copyBackup(d *docker.Container) error {
 	backupPath := filepath.Join(backupDirectory(), d.ContainerName)
 	fileName := fmt.Sprintf("%s_%s.zip", d.ContainerName, time.Now().Format(backup.FileNameTimeLayout))
+	backupFilePath := path.Join(backupPath, fileName)
 
 	// Create the directory if it doesn't exist
 	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
@@ -100,7 +101,7 @@ func copyBackup(d *docker.Container) error {
 	}
 
 	// Create the file
-	f, err := os.Create(path.Join(backupPath, fileName))
+	f, err := os.Create(backupFilePath)
 	if err != nil {
 		return err
 	}
@@ -118,8 +119,12 @@ func copyBackup(d *docker.Container) error {
 	}
 
 	// Copy server files and write as zip data
-	err = backup.Copy(f, c, l, d.CopyFrom)
-	if err != nil {
+	if err = backup.Copy(f, c, l, d.CopyFrom); err != nil {
+		// Clean up bad backup file
+		if err := os.Remove(backupFilePath); err != nil {
+			log.Panicf("failed to remove file after error in backup process: %s", err)
+		}
+
 		return err
 	}
 

@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"log"
-	"strings"
 
 	"github.com/danhale-git/craft/internal/docker"
 
@@ -41,9 +40,8 @@ func init() {
 				log.Fatalf("Error loading backup file to server: %s", err)
 			}
 
-			// Run the bedrock_server process
-			if err = d.Command(strings.Split(RunMCCommand, " ")); err != nil {
-				log.Fatalf("Error executing server start command: %s", err)
+			if err = runServer(d); err != nil {
+				log.Fatalf("Error starting server process: %s", err)
 			}
 
 			return nil

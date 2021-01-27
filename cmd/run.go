@@ -1,8 +1,8 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
-	"io"
 	"log"
 	"os"
 	"strings"
@@ -120,7 +120,7 @@ func init() {
 				}
 			}*/
 
-			go func() {
+			/*go func() {
 				logs, err := d.LogReader(20)
 				if err != nil {
 					log.Fatalf("Error reading logs from server: %s", err)
@@ -129,11 +129,10 @@ func init() {
 				if _, err := io.Copy(os.Stdout, logs); err != nil {
 					log.Fatalf("Error copying server output to stdout: %s", err)
 				}
-			}()
+			}()*/
 
-			// Run the bedrock_server process
-			if err = d.Command(strings.Split(RunMCCommand, " ")); err != nil {
-				log.Fatalf("Error executing server start command: %s", err)
+			if err = runServer(d); err != nil {
+				log.Fatalf("Error starting server process: %s", err)
 			}
 
 			return nil
@@ -148,4 +147,29 @@ func init() {
 	runCmd.Flags().StringSlice("prop", []string{}, "A server property name and value e.g. 'gamemode=creative'.")
 	runCmd.Flags().StringSlice("files", []string{},
 		"Full local path to a zip file containing files which will be added to the mc server directory.")
+}
+
+// runServer executes the server binary and waits for the server to be ready before returning.
+func runServer(c *docker.Container) error {
+	// Run the bedrock_server process
+	if err := c.Command(strings.Split(RunMCCommand, " ")); err != nil {
+		return err
+	}
+
+	logs, err := c.LogReader(-1) // Negative number results in all logs
+	if err != nil {
+		return err
+	}
+
+	s := bufio.NewScanner(logs)
+	s.Split(bufio.ScanLines)
+
+	for s.Scan() {
+		if s.Text() == "[INFO] Server started." {
+			// Server has finished starting
+			return nil
+		}
+	}
+
+	return fmt.Errorf("reached end of log reader without finding the 'Server started' message")
 }
