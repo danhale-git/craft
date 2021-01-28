@@ -14,10 +14,10 @@ RUN cd bedrock; \
     unzip bedrock-server-1.16.200.02.zip
 
 RUN mkdir bedrock/worlds; \
-    mkdir bedrock/worlds/'Bedrock level'
+    mkdir bedrock/worlds/'Bedrock level' \
+    mkdir bedrock/worlds/'Bedrock level'/db
 
-COPY craft /usr/local/bin
-
+#COPY craft /usr/local/bin
 
 # CMD cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server
 

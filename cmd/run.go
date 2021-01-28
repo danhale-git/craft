@@ -1,14 +1,19 @@
 package cmd
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"os"
 	"strings"
 
-	"github.com/danhale-git/craft/internal/craft"
+	"github.com/danhale-git/craft/internal/docker"
 
 	"github.com/spf13/cobra"
+)
+
+const (
+	RunMCCommand = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server"
 )
 
 func init() {
@@ -23,7 +28,7 @@ func init() {
 		},
 		// Create a new docker container, copy files and run the mc server binary
 		RunE: func(cmd *cobra.Command, args []string) error {
-			backups, err := craft.BackupServerNames()
+			backups, err := backupServerNames()
 			if err != nil {
 				log.Fatalf("Error getting backups: %s", err)
 			}
@@ -41,12 +46,12 @@ func init() {
 			}
 
 			// Create a container for the server
-			d, err := craft.NewContainer(port, args[0])
+			d, err := docker.RunContainer(port, args[0])
 			if err != nil {
 				log.Fatalf("Error creating new container: %s", err)
 			}
 
-			var worldPath, propsPath string
+			/*var worldPath, propsPath string
 			if worldPath, err = cmd.Flags().GetString("world"); err != nil {
 				log.Fatal(err)
 			}
@@ -93,17 +98,41 @@ func init() {
 				}
 			}
 
+			// Add files
+			files, err := cmd.Flags().GetStringSlice("files")
+			if err != nil {
+				panic(err)
+			}
+
+			if len(files) > 0 {
+				for _, path := range files {
+					if err = sb.LoadZippedFiles(path); err != nil {
+						log.Fatalf("Error loading file at %s: %s", path, err)
+					}
+				}
+			}
+
+			// Restore all server files if needed
 			if sb.Archive != nil && len(sb.Files) > 0 {
 				err := sb.Restore()
 				if err != nil {
 					log.Fatalf("Error loading files to server: %s", err)
 				}
-			}
+			}*/
 
-			// Run the bedrock_server process
-			err = d.Command(strings.Split(craft.RunMCCommand, " "))
-			if err != nil {
-				return err
+			/*go func() {
+				logs, err := d.LogReader(20)
+				if err != nil {
+					log.Fatalf("Error reading logs from server: %s", err)
+				}
+
+				if _, err := io.Copy(os.Stdout, logs); err != nil {
+					log.Fatalf("Error copying server output to stdout: %s", err)
+				}
+			}()*/
+
+			if err = runServer(d); err != nil {
+				log.Fatalf("Error starting server process: %s", err)
 			}
 
 			return nil
@@ -112,9 +141,35 @@ func init() {
 
 	rootCmd.AddCommand(runCmd)
 
+	runCmd.Flags().IntP("port", "p", 0, "External port players connect to.")
 	runCmd.Flags().String("world", "", "Path to a .mcworld file to be loaded.")
 	runCmd.Flags().String("server-properties", "", "Path to a server.properties file to be loaded.")
 	runCmd.Flags().StringSlice("prop", []string{}, "A server property name and value e.g. 'gamemode=creative'.")
+	runCmd.Flags().StringSlice("files", []string{},
+		"Full local path to a zip file containing files which will be added to the mc server directory.")
+}
 
-	runCmd.Flags().IntP("port", "p", 0, "External port players connect to.")
+// runServer executes the server binary and waits for the server to be ready before returning.
+func runServer(c *docker.Container) error {
+	// Run the bedrock_server process
+	if err := c.Command(strings.Split(RunMCCommand, " ")); err != nil {
+		return err
+	}
+
+	logs, err := c.LogReader(-1) // Negative number results in all logs
+	if err != nil {
+		return err
+	}
+
+	s := bufio.NewScanner(logs)
+	s.Split(bufio.ScanLines)
+
+	for s.Scan() {
+		if s.Text() == "[INFO] Server started." {
+			// Server has finished starting
+			return nil
+		}
+	}
+
+	return fmt.Errorf("reached end of log reader without finding the 'Server started' message")
 }

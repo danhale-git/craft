@@ -2,16 +2,19 @@ package cmd
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"text/tabwriter"
 
-	"github.com/danhale-git/craft/internal/craft"
+	"github.com/danhale-git/craft/internal/docker"
 
 	"github.com/spf13/cobra"
 )
 
-var timeFormat = "02 Jan 2006 3:04PM"
+const (
+	timeFormat = "02 Jan 2006 3:04PM"
+)
 
 func init() {
 	// listCmd represents the list command
@@ -22,13 +25,13 @@ func init() {
 			w := tabwriter.NewWriter(os.Stdout, 3, 3, 3, ' ', tabwriter.TabIndent)
 
 			// List running servers
-			servers, err := craft.ActiveServerClients()
+			servers, err := docker.ActiveServerClients()
 			if err != nil {
 				log.Fatalf("Error getting server clients: %s", err)
 			}
 
 			for _, s := range servers {
-				c, err := craft.NewDockerClient(s.ContainerName)
+				c, err := docker.NewContainer(s.ContainerName)
 				if err != nil {
 					log.Fatalf("Error creating docker client for container '%s': %s", s.ContainerName, err)
 				}
@@ -57,7 +60,7 @@ func init() {
 			}
 
 			// List backed up servers
-			backupNames, err := craft.BackupServerNames()
+			backupNames, err := backupServerNames()
 			if err != nil {
 				log.Fatalf("Error getting backups: %s", err)
 			}
@@ -75,7 +78,7 @@ func init() {
 					continue
 				}
 
-				_, t, err := craft.LatestServerBackup(n)
+				_, t, err := latestBackupFileName(n)
 				if err != nil {
 					log.Fatalf("Error getting latest backup: %s", err)
 				}
@@ -94,4 +97,21 @@ func init() {
 	listCmd.Flags().BoolP("all", "a", false, "Show all servers. Defaults to only running servers.")
 
 	rootCmd.AddCommand(listCmd)
+}
+
+// backupServerNames returns a slice with the names of all backed up servers.
+func backupServerNames() ([]string, error) {
+	backupDir := backupDirectory()
+	infos, err := ioutil.ReadDir(backupDir)
+
+	if err != nil {
+		return nil, fmt.Errorf("reading directory '%s': %s", backupDir, err)
+	}
+
+	names := make([]string, len(infos))
+	for i, f := range infos {
+		names[i] = f.Name()
+	}
+
+	return names, nil
 }
