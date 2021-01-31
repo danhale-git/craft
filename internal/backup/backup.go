@@ -12,23 +12,16 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	server2 "github.com/danhale-git/craft/internal/server"
 )
 
 const (
-	serverDirectoryPath      = "/bedrock"          // The directory where the mc server files are unpacked
-	worldsDirectoryName      = "worlds"            // The directory where worlds are stored
-	serverPropertiesFileName = "server.properties" // Name of the server properties (configuration) file
-
 	saveQueryRetries = 100 // The number of times save query can run without the expected response
 	saveQueryDelayMS = 100 // The delay between save query retries, in milliseconds
 
 	FileNameTimeLayout = "02-01-2006_15-04" // The format of the file timestamp for the Go time package formatter
 )
-
-// serverFiles is a collection of files needed by craft to return the server to its previous state.
-var serverFiles = []string{
-	serverPropertiesFileName, // server.properties
-}
 
 func MostRecentFileName(serverName string, fileInfoNames []string) (string, *time.Time, error) {
 	var mostRecentTime time.Time
@@ -104,7 +97,7 @@ func Restore(zr *zip.Reader, copyToFunc func(string, *bytes.Buffer) error) error
 			return err
 		}
 
-		err = copyToFunc(filepath.Join(serverDirectoryPath, dir), &data)
+		err = copyToFunc(filepath.Join(server2.RootDirectory, dir), &data)
 		if err != nil {
 			return err
 		}
@@ -116,7 +109,7 @@ func Restore(zr *zip.Reader, copyToFunc func(string, *bytes.Buffer) error) error
 // Copy runs the set of queries described in the bedrock server documentation for taking a backup without server
 // interruption. All files needed for server and world persistence are copied from the server to a local zip file. The
 // paths in the zip file extend to the server directory root.
-func Copy(out, command io.Writer, logs *bufio.Reader, copyFunc func(string) (*tar.Reader, error)) error {
+func Copy(out, command io.Writer, logs *bufio.Reader, copyFunc func(string) (*tar.Reader, error), serverFiles []string) error {
 	// `save hold`
 	runCommand("save hold", command, logs)
 
@@ -143,11 +136,11 @@ func Copy(out, command io.Writer, logs *bufio.Reader, copyFunc func(string) (*ta
 			// Files needed by mc server
 			worldFiles := strings.Split(worldFilesString, ", ")
 			for i, f := range worldFiles {
-				worldFiles[i] = filepath.Join(worldsDirectoryName, strings.Split(f, ":")[0])
+				worldFiles[i] = filepath.Join(server2.FileNames.Worlds, strings.Split(f, ":")[0])
 			}
 
 			for _, p := range append(worldFiles, serverFiles...) {
-				tr, err := copyFunc(filepath.Join(serverDirectoryPath, p))
+				tr, err := copyFunc(filepath.Join(server2.RootDirectory, p))
 				if err != nil {
 					return err
 				}

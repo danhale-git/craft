@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"time"
 
+	server2 "github.com/danhale-git/craft/internal/server"
+
 	"github.com/mitchellh/go-homedir"
 
 	"github.com/danhale-git/craft/internal/backup"
@@ -22,6 +24,11 @@ import (
 const (
 	backupDirName = "craft_backups" // Name of the local directory where backups are stored
 )
+
+// serverFiles is a collection of files needed by craft to return the server to its previous state.
+var serverFiles = []string{
+	server2.FileNames.ServerProperties, // server.properties
+}
 
 // backupCmd represents the backup command
 func init() {
@@ -119,7 +126,7 @@ func copyBackup(d *docker.Container) error {
 	}
 
 	// Copy server files and write as zip data
-	if err = backup.Copy(f, c, l, d.CopyFrom); err != nil {
+	if err = backup.Copy(f, c, l, d.CopyFrom, serverFiles); err != nil {
 		// Clean up bad backup file
 		if err := os.Remove(backupFilePath); err != nil {
 			log.Panicf("failed to remove file after error in backup process: %s", err)

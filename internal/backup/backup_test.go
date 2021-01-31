@@ -7,6 +7,8 @@ import (
 	"bytes"
 	"log"
 	"testing"
+
+	server2 "github.com/danhale-git/craft/internal/server"
 )
 
 func TestMostRecentFileName(t *testing.T) {
@@ -36,6 +38,10 @@ func TestMostRecentFileName(t *testing.T) {
 	got, _, err = MostRecentFileName("test", files)
 	if err != nil {
 		t.Errorf("error returned when invalid file is present: %s", err)
+	}
+
+	if got != want {
+		t.Errorf("incorrect value returned when invalid file is present: want %s: got %s", want, got)
 	}
 }
 
@@ -103,6 +109,10 @@ func mockZip() (*zip.Reader, int) {
 }
 
 func TestCopy(t *testing.T) {
+	serverFiles := []string{
+		server2.FileNames.ServerProperties,
+	}
+
 	// file list in the string literal below has 8 paths
 	want := 8 + len(serverFiles)
 	got := 0
@@ -114,11 +124,12 @@ func TestCopy(t *testing.T) {
 
 	// command echo and responses are read from the CLI
 	logs := bytes.NewReader(
+		//nolint:lll // test
 		[]byte(`save hold
 Saving...
 save query
 Data saved. Files are now ready to be copied.
-Bedrock level/db/MANIFEST-000051:258, Bedrock level/db/000050.ldb:1281520, Bedrock level/db/000053.log:0, Bedrock level/db/000052.ldb:150713, Bedrock level/db/CURRENT:16, Bedrock level/level.dat:2209, Bedrock level/level.dat_old:2209, Bedrock level/levelname.txt:13
+Bedrock level/db/MANIFEST-000051:258, Bedrock level/db/000050.ldb:1281520, Bedrock level/db/000053.log:0, Bedrock level/db/000052.ldb:150713, Bedrock level/db/CURRENT:16, Bedrock level/level.dat:2209, Bedrock level/level.dat_old:2209, Bedrock level/levelname.txt:13 
 save resume
 Changes to the level are resumed.
 `))
@@ -130,6 +141,7 @@ Changes to the level are resumed.
 		bytes.NewBuffer([]byte{}),
 		bufio.NewReader(logs),
 		copyFromFunc,
+		serverFiles,
 	)
 	if err != nil {
 		t.Errorf("error returned when calling with valid input: %s", err)
