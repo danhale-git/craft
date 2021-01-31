@@ -5,16 +5,26 @@ import (
 	"strings"
 )
 
-/*if f.Name == docker.serverPropertiesFileName {
-	updated, err := setProperty(f.Body, field, value)
-	if err != nil {
-		return fmt.Errorf("updating file data: %s", err)
+// SetProperties applies the given set of values to their corresponding keys from two parallel slices. The data should
+// be the contents of a complete (created from default) server.properties file. Missing keys will not be created and
+// will throw an error.
+func SetProperties(k, v []string, data []byte) ([]byte, error) {
+	if len(k) != len(v) {
+		return nil, fmt.Errorf("key and value collections were different lengths, should be one value per key")
 	}
 
-	f.Body = updated
+	for i := 0; i < len(k); i++ {
+		var err error
+		data, err = setProperty(data, k[i], v[i])
 
-	return nil
-}*/
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return data, nil
+}
+
 func setProperty(data []byte, key, value string) ([]byte, error) {
 	lines := strings.Split(string(data), "\n")
 	alteredLines := make([]byte, 0)

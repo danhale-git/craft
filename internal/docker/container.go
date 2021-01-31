@@ -6,6 +6,8 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -22,6 +24,7 @@ const (
 	defaultPort = 19132                          // Default port for player connections
 	protocol    = "UDP"                          // MC uses UDP
 	imageName   = "danhaledocker/craftmine:v1.7" // The name of the docker image to use
+	stopTimeout = 10
 )
 
 // Container is a docker client which operates on an existing container.
@@ -71,6 +74,33 @@ func NewContainer(containerName string) (*Container, error) {
 	return &d, nil
 }
 
+// CopyFileFrom copies the file at the given path, extracts the file body from the tar archive and returns it's bytes.
+func (d *Container) CopyFileFrom(containerPath string) ([]byte, error) {
+	tr, err := d.CopyFrom(containerPath)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = tr.Next()
+	if err == io.EOF {
+		return nil, fmt.Errorf("no file was found at '%s', got EOF reading tar archive", containerPath)
+	}
+
+	if err != nil {
+		return nil, fmt.Errorf("reading tar archive: %s", err)
+	}
+
+	b, err := ioutil.ReadAll(tr)
+	if err != nil {
+		return nil, err
+	}
+	if len(b) == 0 {
+		return nil, fmt.Errorf("0 bytes returned frop copy operation")
+	}
+
+	return b, nil
+}
+
 // CopyFrom returns a tar archive containing the file(s) at the given container path.
 func (d *Container) CopyFrom(containerPath string) (*tar.Reader, error) {
 	data, _, err := d.CopyFromContainer(
@@ -83,6 +113,26 @@ func (d *Container) CopyFrom(containerPath string) (*tar.Reader, error) {
 	}
 
 	return tar.NewReader(data), nil
+}
+
+// CopyFileTo archives the given bytes as a tar containing one file and copies that file to the destination path.
+func (d *Container) CopyFileTo(destPath, name string, body []byte) error {
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+
+	hdr := &tar.Header{
+		Name: name,
+		Size: int64(len(body)),
+	}
+	if err := tw.WriteHeader(hdr); err != nil {
+		return fmt.Errorf("writing header: %s", err)
+	}
+
+	if _, err := tw.Write(body); err != nil {
+		return fmt.Errorf("writing body: %s", err)
+	}
+
+	return d.CopyTo(destPath, &buf)
 }
 
 // CopyTo copies the given tar data to the destination path in the container.
@@ -150,7 +200,7 @@ func (d *Container) CommandWriter() (net.Conn, error) {
 
 // Stop stops the docker container.
 func (d *Container) Stop() error {
-	timeout := time.Duration(10)
+	timeout := time.Duration(stopTimeout)
 
 	return d.ContainerStop(
 		context.Background(),
