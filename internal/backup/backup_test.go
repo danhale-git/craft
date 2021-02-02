@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"log"
 	"testing"
+	"time"
 
 	server2 "github.com/danhale-git/craft/internal/server"
 )
@@ -42,6 +43,34 @@ func TestMostRecentFileName(t *testing.T) {
 
 	if got != want {
 		t.Errorf("incorrect value returned when invalid file is present: want %s: got %s", want, got)
+	}
+}
+
+func TestFileTime(t *testing.T) {
+	valid := "test_01-02-2021_18-43.zip"
+
+	var want int64 = 1612204980
+
+	tme, err := FileTime(valid)
+	if err != nil {
+		t.Errorf("error returned for valid input: %s", err)
+	}
+
+	got := tme.Unix()
+
+	if got != want {
+		t.Errorf("unexpected value returned: want %d: got %d", want, got)
+	}
+
+	invalid := "01-02-2021_18-43.zip"
+
+	_, err = FileTime(invalid)
+	if err == nil {
+		t.Error("no error returned for bad input", err)
+	}
+
+	if _, ok := err.(*time.ParseError); !ok {
+		t.Errorf("unexpected error type: want time.ParseError: got %T", err)
 	}
 }
 

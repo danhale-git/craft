@@ -37,7 +37,7 @@ func MostRecentFileName(serverName string, fileInfoNames []string) (string, *tim
 			t, err := time.Parse(FileNameTimeLayout, backupTime)
 			if err != nil {
 				if _, ok := err.(*time.ParseError); ok {
-					fmt.Printf("Warning: skipping file '%s': %s\n", n, err)
+					//fmt.Printf("Warning: skipping file '%s': %s\n", n, err)
 					continue
 				}
 
@@ -52,6 +52,23 @@ func MostRecentFileName(serverName string, fileInfoNames []string) (string, *tim
 	}
 
 	return mostRecentFileName, &mostRecentTime, nil
+}
+
+// FileTime returns the time.Time the backup was taken, given the file name.
+func FileTime(name string) (time.Time, error) {
+	backupTime := strings.SplitN(name, "_", 2)[1]
+	backupTime = strings.Split(backupTime, ".")[0]
+
+	t, err := time.Parse(FileNameTimeLayout, backupTime)
+	if err != nil {
+		if _, ok := err.(*time.ParseError); ok {
+			return time.Time{}, err
+		}
+
+		panic(err)
+	}
+
+	return t, nil
 }
 
 // Restore reads from the given zip.ReadCloser, copying each of the files to the directory containing the server
