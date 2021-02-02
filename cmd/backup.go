@@ -78,20 +78,15 @@ func backupDirectory() string {
 	return backupDir
 }
 
-func latestBackupFileName(serverName string) (string, *time.Time, error) {
+func latestBackupFileName(serverName string) os.FileInfo {
 	backupDir := backupDirectory()
 
 	infos, err := ioutil.ReadDir(path.Join(backupDir, serverName))
 	if err != nil {
-		return "", nil, fmt.Errorf("reading directory '%s': %s", backupDir, err)
+		panic(err)
 	}
 
-	names := make([]string, len(infos))
-	for i := 0; i < len(infos); i++ {
-		names[i] = infos[i].Name()
-	}
-
-	return backup.MostRecentFileName(serverName, names)
+	return backup.SortFilesByDate(infos)[len(infos)-1]
 }
 
 func copyBackup(d *docker.Container) error {
