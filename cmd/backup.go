@@ -148,7 +148,7 @@ func restoreBackup(d *docker.Container, backupName string) error {
 		return err
 	}
 
-	if err = backup.Restore(&zr.Reader, d.CopyTo); err != nil {
+	if err = backup.Restore(&zr.Reader, d.CopyTo, false); err != nil {
 		return err
 	}
 

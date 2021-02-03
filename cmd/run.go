@@ -1,11 +1,14 @@
 package cmd
 
 import (
+	"archive/zip"
 	"bufio"
 	"fmt"
 	"log"
 	"os"
 	"strings"
+
+	"github.com/danhale-git/craft/internal/backup"
 
 	"github.com/danhale-git/craft/internal/docker"
 
@@ -50,6 +53,29 @@ func init() {
 			c, err := docker.RunContainer(port, args[0])
 			if err != nil {
 				log.Fatalf("Error creating new container: %s", err)
+			}
+
+			mcworld, err := cmd.Flags().GetString("world")
+			if err != nil {
+				panic(err)
+			}
+
+			// Copy the world files to the server
+			if mcworld != "" {
+				// Open backup zip
+				zr, err := zip.OpenReader(mcworld)
+				if err != nil {
+					return err
+				}
+
+				// TODO: Backup fails if directory db/lost exists
+				if err = backup.Restore(&zr.Reader, c.CopyTo, true); err != nil {
+					return err
+				}
+
+				if err = zr.Close(); err != nil {
+					return fmt.Errorf("closing zip: %s", err)
+				}
 			}
 
 			// Run the server process
