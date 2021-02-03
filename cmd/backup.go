@@ -2,12 +2,14 @@ package cmd
 
 import (
 	"archive/zip"
+	"bufio"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"path"
 	"path/filepath"
+	"strings"
 	"time"
 
 	server2 "github.com/danhale-git/craft/internal/server"
@@ -46,16 +48,101 @@ The backed up world is usually a few seconds behind the world state at the time 
 		},
 		// save the world files to a backup archive
 		Run: func(cmd *cobra.Command, args []string) {
-			d := docker.NewContainerOrExit(args[0])
+			c := docker.NewContainerOrExit(args[0])
 
-			err := copyBackup(d)
+			l, err := cmd.Flags().GetBool("list")
+			if err != nil {
+				panic(err)
+			}
+
+			// List backups and exit
+			if l {
+				backups := listBackups(c.ContainerName)
+				for i := len(backups) - 1; i >= 0; i-- {
+					fmt.Println(backups[i].Name())
+				}
+				return
+			}
+
+			// Take a new backup
+			err = copyBackup(c)
 			if err != nil {
 				log.Fatalf("Error taking backup: %s", err)
+			}
+
+			trim, err := cmd.Flags().GetInt("trim")
+			if err != nil {
+				panic(err)
+			}
+			skip, err := cmd.Flags().GetBool("skip-trim-file-removal-check")
+			if err != nil {
+				panic(err)
+			}
+
+			// Delete old backups
+			if trim > 0 {
+				backups := listBackups(c.ContainerName)
+				if trim >= len(backups) {
+					fmt.Printf("Only %d backup files exist, trimming %d would remove them all", len(backups), trim)
+					return
+				}
+
+				remove := backups[:len(backups)-trim]
+				d := filepath.Join(backupDirectory(), c.ContainerName)
+
+				// Check before removing files
+				if !skip {
+					for _, f := range remove {
+						fmt.Println(f.Name())
+					}
+
+					fmt.Print("Remove the following files? (y/n): ")
+					text, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+
+					if strings.TrimSpace(text) != "y" {
+						fmt.Println("cancelled")
+						return
+					}
+				}
+
+				fmt.Print("Deleted:")
+				for _, f := range remove {
+					if err = os.Remove(filepath.Join(d, f.Name())); err != nil {
+						fmt.Println()
+						log.Fatalf("Error removing file: %s", err)
+					}
+					fmt.Print(" ", f.Name())
+				}
+				fmt.Println()
 			}
 		},
 	}
 
+	backupCmd.Flags().IntP("trim", "t", 0,
+		"Delete the oldest backup files, leaving the given count of newest files in place.")
+	backupCmd.Flags().Bool("skip-trim-file-removal-check", false,
+		"Don't prompt the user before removing files. Useful for automating backups.")
+	backupCmd.Flags().BoolP("list", "l", false,
+		"List backup files and take no other action.")
 	rootCmd.AddCommand(backupCmd)
+}
+
+func listBackups(server string) []os.FileInfo {
+	infos := make([]os.FileInfo, 0)
+	d := filepath.Join(backupDirectory(), server)
+
+	err := filepath.Walk(d, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			log.Fatalf("Error getting backup file: %s", err)
+		}
+		infos = append(infos, info)
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	return backup.SortFilesByDate(infos)
 }
 
 func backupDirectory() string {
