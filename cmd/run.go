@@ -6,7 +6,11 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path"
+	"path/filepath"
 	"strings"
+
+	"github.com/danhale-git/craft/internal/server"
 
 	"github.com/danhale-git/craft/internal/backup"
 
@@ -68,7 +72,37 @@ func init() {
 					return err
 				}
 
-				// TODO: Backup fails if directory db/lost exists
+				// Create required directories if they don't exist
+				paths := make(map[string]bool)
+				for _, f := range zr.File {
+					paths[filepath.Dir(f.Name)] = false
+				}
+
+				for p := range paths {
+					dirPath := path.Join(server.FilePaths.DefaultWorld, p)
+
+					_, err := c.Stat(p)
+					if err == nil {
+						// Directory exist
+						continue
+					}
+
+					//TODO: This is all very messy and we've only seen an unexpected directory once.
+
+					// The error type we want to check is not exported so check the string
+					if strings.Contains(fmt.Sprintf("%v", err), "No such container:path") {
+						command := fmt.Sprintf("mkdir -p '%s'", strings.Replace(dirPath, "\\", "/", -1))
+
+						err = c.Command(strings.Split(command, " "))
+						if err != nil {
+							return fmt.Errorf("running mkdir command: %s", err)
+						}
+					} else {
+						// An unexpected error occurred
+						return err
+					}
+				}
+
 				if err = backup.Restore(&zr.Reader, c.CopyTo, true); err != nil {
 					return err
 				}

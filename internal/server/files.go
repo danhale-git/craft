@@ -2,7 +2,6 @@ package server
 
 import (
 	"path"
-	"path/filepath"
 )
 
 type FileDetails struct {
@@ -22,7 +21,7 @@ var FileNames = FileDetails{
 var FilePaths = FileDetails{
 	ServerProperties: path.Join(RootDirectory, "server.properties"), // File defining the server settings
 	Worlds:           path.Join(RootDirectory, FileNames.Worlds),    // Directory where worlds are stored
-	DefaultWorld:     filepath.Join(RootDirectory, FileNames.Worlds, FileNames.DefaultWorld),
+	DefaultWorld:     path.Join(RootDirectory, FileNames.Worlds, FileNames.DefaultWorld),
 }
 
 const (
