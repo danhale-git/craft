@@ -23,35 +23,25 @@ const (
 	FileNameTimeLayout = "02-01-2006_15-04" // The format of the file timestamp for the Go time package formatter
 )
 
-func MostRecentFileName(serverName string, fileInfoNames []string) (string, *time.Time, error) {
-	var mostRecentTime time.Time
-
-	var mostRecentFileName string
-
-	for _, n := range fileInfoNames {
-		prefix := fmt.Sprintf("%s_", serverName)
-		if strings.HasPrefix(n, prefix) {
-			backupTime := strings.Replace(n, prefix, "", 1)
-			backupTime = strings.Split(backupTime, ".")[0]
-
-			t, err := time.Parse(FileNameTimeLayout, backupTime)
-			if err != nil {
-				if _, ok := err.(*time.ParseError); ok {
-					fmt.Printf("Warning: skipping file '%s': %s\n", n, err)
-					continue
-				}
-
-				return "", nil, fmt.Errorf("parsing time from file name '%s': %s", n, err)
-			}
-
-			if t.After(mostRecentTime) {
-				mostRecentTime = t
-				mostRecentFileName = n
-			}
-		}
+// FileTime returns the time.Time the backup was taken, given the file name.
+func FileTime(name string) (time.Time, error) {
+	split := strings.SplitN(name, "_", 2)
+	if len(split) < 2 {
+		return time.Time{}, fmt.Errorf("invalid file name: '%s'", name)
 	}
 
-	return mostRecentFileName, &mostRecentTime, nil
+	backupTime := strings.Split(split[1], ".")[0]
+
+	t, err := time.Parse(FileNameTimeLayout, backupTime)
+	if err != nil {
+		if _, ok := err.(*time.ParseError); ok {
+			return time.Time{}, err
+		}
+
+		panic(err)
+	}
+
+	return t, nil
 }
 
 // Restore reads from the given zip.ReadCloser, copying each of the files to the directory containing the server

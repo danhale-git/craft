@@ -7,41 +7,36 @@ import (
 	"bytes"
 	"log"
 	"testing"
+	"time"
 
 	server2 "github.com/danhale-git/craft/internal/server"
 )
 
-func TestMostRecentFileName(t *testing.T) {
-	files := []string{"test_11-01-2021_17-01.zip",
-		"test_11-01-2021_17-02.zip",
-		"test_11-01-2021_17-03.zip",
-		"test_11-01-2021_17-04.zip",
-		"test_11-01-2021_17-05.zip",
-		"test_11-01-2021_17-06.zip",
-		"test_12-01-2021_17-07.zip",
-		"test_13-01-2021_17-08.zip",
-	}
+func TestFileTime(t *testing.T) {
+	valid := "test_01-02-2021_18-43.zip"
 
-	want := files[len(files)-1]
+	var want int64 = 1612204980
 
-	got, _, err := MostRecentFileName("test", files)
+	tme, err := FileTime(valid)
 	if err != nil {
-		t.Fatalf("error returned for valid input: %s", err)
+		t.Errorf("error returned for valid input: %s", err)
 	}
+
+	got := tme.Unix()
 
 	if got != want {
-		t.Errorf("incorrect value returned: want %s: got %s", want, got)
+		t.Errorf("unexpected value returned: want %d: got %d", want, got)
 	}
 
-	files[0] = "test_non_standard_file_name"
+	invalid := "01-02-2021_18-43.zip"
 
-	got, _, err = MostRecentFileName("test", files)
-	if err != nil {
-		t.Errorf("error returned when invalid file is present: %s", err)
+	_, err = FileTime(invalid)
+	if err == nil {
+		t.Error("no error returned for bad input", err)
 	}
 
-	if got != want {
-		t.Errorf("incorrect value returned when invalid file is present: want %s: got %s", want, got)
+	if _, ok := err.(*time.ParseError); !ok {
+		t.Errorf("unexpected error type: want time.ParseError: got %T", err)
 	}
 }
 

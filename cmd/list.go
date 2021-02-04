@@ -7,6 +7,8 @@ import (
 	"os"
 	"text/tabwriter"
 
+	"github.com/danhale-git/craft/internal/backup"
+
 	"github.com/danhale-git/craft/internal/docker"
 
 	"github.com/spf13/cobra"
@@ -78,9 +80,11 @@ func init() {
 					continue
 				}
 
-				_, t, err := latestBackupFileName(n)
+				f := latestBackupFileName(n)
+
+				t, err := backup.FileTime(f.Name())
 				if err != nil {
-					log.Fatalf("Error getting latest backup: %s", err)
+					panic(err)
 				}
 
 				if _, err := fmt.Fprintf(w, "%s\tstopped - %s\n", n, t.Format(timeFormat)); err != nil {
@@ -108,9 +112,14 @@ func backupServerNames() ([]string, error) {
 		return nil, fmt.Errorf("reading directory '%s': %s", backupDir, err)
 	}
 
-	names := make([]string, len(infos))
-	for i, f := range infos {
-		names[i] = f.Name()
+	names := make([]string, 0)
+
+	for _, f := range infos {
+		if !f.IsDir() {
+			continue
+		}
+
+		names = append(names, f.Name())
 	}
 
 	return names, nil
