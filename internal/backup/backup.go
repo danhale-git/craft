@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	server2 "github.com/danhale-git/craft/internal/server"
+	"github.com/danhale-git/craft/internal/server"
 )
 
 const (
@@ -55,8 +55,9 @@ func MostRecentFileName(serverName string, fileInfoNames []string) (string, *tim
 }
 
 // Restore reads from the given zip.ReadCloser, copying each of the files to the directory containing the server
-// files.
-func Restore(zr *zip.Reader, copyToFunc func(string, *bytes.Buffer) error) error {
+// files. If the mcworld parameter is true, the destination path is prefixed with the world directory to support valid
+// .mcworld zip files.
+func Restore(zr *zip.Reader, copyToFunc func(string, *bytes.Buffer) error, mcworld bool) error {
 	// Write zipped files to tar archive
 	for _, f := range zr.File {
 		var data bytes.Buffer
@@ -97,7 +98,15 @@ func Restore(zr *zip.Reader, copyToFunc func(string, *bytes.Buffer) error) error
 			return err
 		}
 
-		err = copyToFunc(filepath.Join(server2.RootDirectory, dir), &data)
+		// Handle .mcworld files
+		var pathPrefix string
+		if mcworld {
+			pathPrefix = server.FilePaths.DefaultWorld
+		} else {
+			pathPrefix = server.RootDirectory
+		}
+
+		err = copyToFunc(filepath.Join(pathPrefix, dir), &data)
 		if err != nil {
 			return err
 		}
@@ -136,11 +145,11 @@ func Copy(out, command io.Writer, logs *bufio.Reader, copyFunc func(string) (*ta
 			// Files needed by mc server
 			worldFiles := strings.Split(worldFilesString, ", ")
 			for i, f := range worldFiles {
-				worldFiles[i] = filepath.Join(server2.FileNames.Worlds, strings.Split(f, ":")[0])
+				worldFiles[i] = filepath.Join(server.FileNames.Worlds, strings.Split(f, ":")[0])
 			}
 
 			for _, p := range append(worldFiles, serverFiles...) {
-				tr, err := copyFunc(filepath.Join(server2.RootDirectory, p))
+				tr, err := copyFunc(filepath.Join(server.RootDirectory, p))
 				if err != nil {
 					return err
 				}

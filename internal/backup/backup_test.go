@@ -45,6 +45,7 @@ func TestMostRecentFileName(t *testing.T) {
 	}
 }
 
+// TODO: test that restore supports .mcworld files
 func TestRestore(t *testing.T) {
 	got := 0
 	copyToFunc := func(string, *bytes.Buffer) error {
@@ -54,9 +55,18 @@ func TestRestore(t *testing.T) {
 	}
 
 	// zip data and count of zipped files
-	z, want := mockZip()
+	z, want := mockZip(map[string]string{
+		"db/MANIFEST-000051":                 "some content",
+		"worlds/Bedrock level/db/000050.ldb": "some content",
+		"worlds/Bedrock level/db/000053.log": "some content",
+		"worlds/Bedrock level/db/000052.ldb": "some content",
+		"worlds/Bedrock level/db/CURRENT":    "some content",
+		"worlds/Bedrock level/level.dat":     "some content",
+		"worlds/Bedrock level/level.dat_old": "some content",
+		"worlds/Bedrock level/levelname.txt": "some content",
+	})
 
-	if err := Restore(z, copyToFunc); err != nil {
+	if err := Restore(z, copyToFunc, false); err != nil {
 		t.Errorf("error returned when calling with valid input: %s", err)
 	}
 
@@ -65,31 +75,17 @@ func TestRestore(t *testing.T) {
 	}
 }
 
-func mockZip() (*zip.Reader, int) {
+func mockZip(files map[string]string) (*zip.Reader, int) {
 	buf := new(bytes.Buffer)
 	w := zip.NewWriter(buf)
 
-	var files = []struct {
-		Name, Body string
-	}{
-		{"server.properties", "some content"},
-		{"worlds/Bedrock level/db/MANIFEST-000051", "some content"},
-		{"worlds/Bedrock level/db/000050.ldb", "some content"},
-		{"worlds/Bedrock level/db/000053.log", "some content"},
-		{"worlds/Bedrock level/db/000052.ldb", "some content"},
-		{"worlds/Bedrock level/db/CURRENT", "some content"},
-		{"worlds/Bedrock level/level.dat", "some content"},
-		{"worlds/Bedrock level/level.dat_old", "some content"},
-		{"worlds/Bedrock level/levelname.txt", "some content"},
-	}
-
-	for _, file := range files {
-		f, err := w.Create(file.Name)
+	for name, body := range files {
+		f, err := w.Create(name)
 		if err != nil {
 			log.Fatal(err)
 		}
 
-		_, err = f.Write([]byte(file.Body))
+		_, err = f.Write([]byte(body))
 		if err != nil {
 			log.Fatal(err)
 		}
