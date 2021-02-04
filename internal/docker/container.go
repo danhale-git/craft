@@ -261,6 +261,10 @@ func (d *Container) GetPort() (int, error) {
 	return port, nil
 }
 
+func (d *Container) Stat(path string) (docker.ContainerPathStat, error) {
+	return d.ContainerStatPath(context.Background(), d.containerID, path)
+}
+
 // ContainerNotFoundError tells the caller that no containers were found with the given name.
 type ContainerNotFoundError struct {
 	Name string

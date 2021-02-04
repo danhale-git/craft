@@ -1,11 +1,14 @@
 package cmd
 
 import (
+	"archive/zip"
 	"bufio"
 	"fmt"
 	"log"
 	"os"
 	"strings"
+
+	"github.com/danhale-git/craft/internal/backup"
 
 	"github.com/danhale-git/craft/internal/docker"
 
@@ -52,6 +55,29 @@ func init() {
 				log.Fatalf("Error creating new container: %s", err)
 			}
 
+			mcworld, err := cmd.Flags().GetString("world")
+			if err != nil {
+				panic(err)
+			}
+
+			// Copy the world files to the server
+			if mcworld != "" {
+				checkWorldFiles(mcworld)
+				// Open backup zip
+				zr, err := zip.OpenReader(mcworld)
+				if err != nil {
+					return err
+				}
+
+				if err = backup.Restore(&zr.Reader, c.CopyTo, true); err != nil {
+					return err
+				}
+
+				if err = zr.Close(); err != nil {
+					return fmt.Errorf("closing zip: %s", err)
+				}
+			}
+
 			// Run the server process
 			if err = runServer(c); err != nil {
 				log.Fatalf("Error starting server process: %s", err)
@@ -65,6 +91,29 @@ func init() {
 
 	runCmd.Flags().IntP("port", "p", 0, "External port players connect to.")
 	runCmd.Flags().String("world", "", "Path to a .mcworld file to be loaded.")
+}
+
+func checkWorldFiles(mcworld string) {
+	expected := map[string]bool{
+		"db":            false,
+		"level.dat":     false,
+		"levelname.txt": false,
+	}
+
+	zr, err := zip.OpenReader(mcworld)
+	if err != nil {
+		log.Fatalf("Error checking world files: %s", err)
+	}
+
+	for _, f := range zr.File {
+		expected[f.Name] = true
+	}
+
+	if !(expected["db"] &&
+		expected["level.dat"] &&
+		expected["levelname.txt"]) {
+		log.Fatalf("Invalid world file: missing one of: db, level.dat, levelname.txt")
+	}
 }
 
 // runServer executes the server binary and waits for the server to be ready before returning.
