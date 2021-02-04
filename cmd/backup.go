@@ -35,87 +35,19 @@ var serverFiles = []string{
 // backupCmd represents the backup command
 func init() {
 	backupCmd := &cobra.Command{
-		Use:   "backup <server name>",
+		Use:   "backup <server names...>",
 		Short: "Take a backup",
 		Long: `
 Save the current world and server.properties to a zip file in the backup directory.
 If two backups are taken in the same minute, the second will overwrite the first.
 Backups are saved to a default directory under the user's home directory.
-The backed up world is usually a few seconds behind the world state at the time of backup.`,
-		// Allow only one argument
+The backed up world is usually a few seconds behind the world state at the time of backup.
+Use the trim and skip-trim-file-removal-check flags with linux cron or windows task scheduler to automate backups.`,
 		Args: func(cmd *cobra.Command, args []string) error {
-			return cobra.RangeArgs(1, 1)(cmd, args)
+			return cobra.MinimumNArgs(1)(cmd, args)
 		},
 		// save the world files to a backup archive
-		Run: func(cmd *cobra.Command, args []string) {
-			c := docker.NewContainerOrExit(args[0])
-
-			l, err := cmd.Flags().GetBool("list")
-			if err != nil {
-				panic(err)
-			}
-
-			// List backups and exit
-			if l {
-				backups := listBackups(c.ContainerName)
-				for i := len(backups) - 1; i >= 0; i-- {
-					fmt.Println(backups[i].Name())
-				}
-				return
-			}
-
-			// Take a new backup
-			err = copyBackup(c)
-			if err != nil {
-				log.Fatalf("Error taking backup: %s", err)
-			}
-
-			trim, err := cmd.Flags().GetInt("trim")
-			if err != nil {
-				panic(err)
-			}
-			skip, err := cmd.Flags().GetBool("skip-trim-file-removal-check")
-			if err != nil {
-				panic(err)
-			}
-
-			// Delete old backups
-			if trim > 0 {
-				backups := listBackups(c.ContainerName)
-				if trim >= len(backups) {
-					fmt.Printf("Only %d backup files exist, trimming %d would remove them all", len(backups), trim)
-					return
-				}
-
-				remove := backups[:len(backups)-trim]
-				d := filepath.Join(backupDirectory(), c.ContainerName)
-
-				// Check before removing files
-				if !skip {
-					for _, f := range remove {
-						fmt.Println(f.Name())
-					}
-
-					fmt.Print("Remove the following files? (y/n): ")
-					text, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-
-					if strings.TrimSpace(text) != "y" {
-						fmt.Println("cancelled")
-						return
-					}
-				}
-
-				fmt.Print("Deleted:")
-				for _, f := range remove {
-					if err = os.Remove(filepath.Join(d, f.Name())); err != nil {
-						fmt.Println()
-						log.Fatalf("Error removing file: %s", err)
-					}
-					fmt.Print(" ", f.Name())
-				}
-				fmt.Println()
-			}
-		},
+		Run: RunCommand,
 	}
 
 	backupCmd.Flags().IntP("trim", "t", 0,
@@ -125,6 +57,88 @@ The backed up world is usually a few seconds behind the world state at the time 
 	backupCmd.Flags().BoolP("list", "l", false,
 		"List backup files and take no other action.")
 	rootCmd.AddCommand(backupCmd)
+}
+
+func RunCommand(cmd *cobra.Command, args []string) {
+	for _, arg := range args {
+		c := docker.NewContainerOrExit(arg)
+
+		l, err := cmd.Flags().GetBool("list")
+		if err != nil {
+			panic(err)
+		}
+
+		// List backups and exit
+		if l {
+			backups := listBackups(c.ContainerName)
+
+			for i := len(backups) - 1; i >= 0; i-- {
+				fmt.Println(backups[i].Name())
+			}
+
+			return
+		}
+
+		// Take a new backup
+		err = copyBackup(c)
+		if err != nil {
+			log.Fatalf("Error taking backup: %s", err)
+		}
+
+		trim, err := cmd.Flags().GetInt("trim")
+		if err != nil {
+			panic(err)
+		}
+
+		skip, err := cmd.Flags().GetBool("skip-trim-file-removal-check")
+		if err != nil {
+			panic(err)
+		}
+
+		// Delete old backups
+		if trim > 0 {
+			trimBackups(c.ContainerName, trim, skip)
+		}
+	}
+}
+
+func trimBackups(name string, keep int, skip bool) {
+	backups := listBackups(name)
+	if keep >= len(backups) {
+		return
+	}
+
+	remove := backups[:len(backups)-keep]
+	d := filepath.Join(backupDirectory(), name)
+
+	// Check before removing files
+	if !skip {
+		for _, f := range remove {
+			fmt.Println(f.Name())
+		}
+
+		fmt.Print("Remove the following files? (y/n): ")
+
+		text, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+
+		if strings.TrimSpace(text) != "y" {
+			fmt.Println("cancelled")
+			return
+		}
+	}
+
+	fmt.Print("Deleted:")
+
+	for _, f := range remove {
+		if err := os.Remove(filepath.Join(d, f.Name())); err != nil {
+			fmt.Println()
+			log.Fatalf("Error removing file: %s", err)
+		}
+
+		fmt.Print(" ", f.Name())
+	}
+
+	fmt.Println()
 }
 
 func listBackups(server string) []os.FileInfo {
