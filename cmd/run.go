@@ -62,6 +62,7 @@ func init() {
 
 			// Copy the world files to the server
 			if mcworld != "" {
+				checkWorldFiles(mcworld)
 				// Open backup zip
 				zr, err := zip.OpenReader(mcworld)
 				if err != nil {
@@ -90,6 +91,29 @@ func init() {
 
 	runCmd.Flags().IntP("port", "p", 0, "External port players connect to.")
 	runCmd.Flags().String("world", "", "Path to a .mcworld file to be loaded.")
+}
+
+func checkWorldFiles(mcworld string) {
+	expected := map[string]bool{
+		"db":            false,
+		"level.dat":     false,
+		"levelname.txt": false,
+	}
+
+	zr, err := zip.OpenReader(mcworld)
+	if err != nil {
+		log.Fatalf("Error checking world files: %s", err)
+	}
+
+	for _, f := range zr.File {
+		expected[f.Name] = true
+	}
+
+	if !(expected["db"] &&
+		expected["level.dat"] &&
+		expected["levelname.txt"]) {
+		log.Fatalf("Invalid world file: missing one of: db, level.dat, levelname.txt")
+	}
 }
 
 // runServer executes the server binary and waits for the server to be ready before returning.
