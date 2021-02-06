@@ -4,12 +4,27 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/danhale-git/craft/internal/logger"
+
 	"github.com/spf13/cobra"
 )
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use: "craft",
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		logPath, err := cmd.Flags().GetString("log")
+		if err != nil {
+			panic(fmt.Sprintln(cmd.Name(), err))
+		}
+
+		logLevel, err := cmd.Flags().GetString("log-level")
+		if err != nil {
+			panic(err)
+		}
+
+		logger.Init(logPath, logLevel, fmt.Sprintf("[%s]", cmd.Name()))
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -23,6 +38,12 @@ func Execute() {
 
 func init() {
 	cobra.OnInitialize(initConfig)
+
+	rootCmd.PersistentFlags().String("log", "",
+		"Path to the file where logs are saved.")
+
+	rootCmd.PersistentFlags().String("log-level", "error",
+		"Minimum severity of logs to output. [info|warn|error].")
 }
 
 // initConfig reads in config file and ENV variables if set.

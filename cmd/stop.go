@@ -26,7 +26,7 @@ func init() {
 
 			// Attempt to back up the server unless instructed otherwise.
 			if !noBackup {
-				err = copyBackup(d)
+				_, err = copyBackup(d)
 				if err != nil {
 					log.Fatalf("Error taking backup: %s", err)
 				}

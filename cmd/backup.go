@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/danhale-git/craft/internal/logger"
+
 	server2 "github.com/danhale-git/craft/internal/server"
 
 	"github.com/mitchellh/go-homedir"
@@ -60,6 +62,9 @@ Use the trim and skip-trim-file-removal-check flags with linux cron or windows t
 }
 
 func RunCommand(cmd *cobra.Command, args []string) {
+	created := make([]string, 0)
+	deleted := make([]string, 0)
+
 	for _, arg := range args {
 		c := docker.NewContainerOrExit(arg)
 
@@ -80,10 +85,12 @@ func RunCommand(cmd *cobra.Command, args []string) {
 		}
 
 		// Take a new backup
-		err = copyBackup(c)
+		name, err := copyBackup(c)
 		if err != nil {
 			log.Fatalf("Error taking backup: %s", err)
 		}
+
+		created = append(created, name)
 
 		trim, err := cmd.Flags().GetInt("trim")
 		if err != nil {
@@ -97,15 +104,25 @@ func RunCommand(cmd *cobra.Command, args []string) {
 
 		// Delete old backups
 		if trim > 0 {
-			trimBackups(c.ContainerName, trim, skip)
+			deleted = append(deleted, trimBackups(c.ContainerName, trim, skip)...)
 		}
+	}
+
+	if len(created) > 0 {
+		logger.Info.Println("created:", strings.Join(created, " "))
+	}
+
+	if len(deleted) > 0 {
+		logger.Info.Println("deleted:", strings.Join(deleted, " "))
 	}
 }
 
-func trimBackups(name string, keep int, skip bool) {
+func trimBackups(name string, keep int, skip bool) []string {
+	deleted := make([]string, 0)
+
 	backups := listBackups(name)
 	if keep >= len(backups) {
-		return
+		return nil
 	}
 
 	remove := backups[:len(backups)-keep]
@@ -113,21 +130,21 @@ func trimBackups(name string, keep int, skip bool) {
 
 	// Check before removing files
 	if !skip {
+		fmt.Println()
+
 		for _, f := range remove {
 			fmt.Println(f.Name())
 		}
 
-		fmt.Print("Remove the following files? (y/n): ")
+		fmt.Print("Remove these files? (y/n): ")
 
 		text, _ := bufio.NewReader(os.Stdin).ReadString('\n')
 
 		if strings.TrimSpace(text) != "y" {
 			fmt.Println("cancelled")
-			return
+			return nil
 		}
 	}
-
-	fmt.Print("Deleted:")
 
 	for _, f := range remove {
 		if err := os.Remove(filepath.Join(d, f.Name())); err != nil {
@@ -135,10 +152,10 @@ func trimBackups(name string, keep int, skip bool) {
 			log.Fatalf("Error removing file: %s", err)
 		}
 
-		fmt.Print(" ", f.Name())
+		deleted = append(deleted, f.Name())
 	}
 
-	fmt.Println()
+	return deleted
 }
 
 func listBackups(server string) []os.FileInfo {
@@ -190,7 +207,7 @@ func latestBackupFileName(serverName string) os.FileInfo {
 	return backup.SortFilesByDate(infos)[len(infos)-1]
 }
 
-func copyBackup(d *docker.Container) error {
+func copyBackup(d *docker.Container) (string, error) {
 	backupPath := filepath.Join(backupDirectory(), d.ContainerName)
 	fileName := fmt.Sprintf("%s_%s.zip", d.ContainerName, time.Now().Format(backup.FileNameTimeLayout))
 	backupFilePath := path.Join(backupPath, fileName)
@@ -199,26 +216,26 @@ func copyBackup(d *docker.Container) error {
 	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
 		err = os.MkdirAll(backupPath, 0755)
 		if err != nil {
-			return err
+			return "", err
 		}
 	}
 
 	// Create the file
 	f, err := os.Create(backupFilePath)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// Write to server CLI
 	c, err := d.CommandWriter()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// Read from server CLI
 	l, err := d.LogReader(0)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	// Copy server files and write as zip data
@@ -228,10 +245,10 @@ func copyBackup(d *docker.Container) error {
 			log.Panicf("failed to remove file after error in backup process: %s", err)
 		}
 
-		return err
+		return "", err
 	}
 
-	return nil
+	return fileName, nil
 }
 
 // RestoreLatestBackup finds the latest backup and restores it to the server.

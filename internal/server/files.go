@@ -4,6 +4,10 @@ import (
 	"path"
 )
 
+const (
+	RootDirectory = "/bedrock" // Directory where the server files are stored
+)
+
 type FileDetails struct {
 	ServerProperties string
 	Worlds           string
@@ -23,7 +27,3 @@ var FilePaths = FileDetails{
 	Worlds:           path.Join(RootDirectory, FileNames.Worlds),    // Directory where worlds are stored
 	DefaultWorld:     path.Join(RootDirectory, FileNames.Worlds, FileNames.DefaultWorld),
 }
-
-const (
-	RootDirectory = "/bedrock" // Directory where the server files are stored
-)
