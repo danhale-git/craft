@@ -48,8 +48,7 @@ func StopCommand(cmd *cobra.Command, args []string) {
 			}
 		}
 
-		err = c.Command([]string{"stop"})
-		if err != nil {
+		if err = c.Command([]string{"stop"}); err != nil {
 			logger.Error.Printf("%s: running 'stop' command: %s", name, err)
 			continue
 		}

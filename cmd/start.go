@@ -49,22 +49,32 @@ func StartCommand(cmd *cobra.Command, args []string) {
 	}
 
 	for _, name := range args {
-		d, err := docker.RunContainer(port, name)
+		c, err := docker.RunContainer(port, name)
 		if err != nil {
 			logger.Error.Printf("%s: running server: %s", name, err)
 			continue
 		}
 
-		f := latestBackupFileName(d.ContainerName)
+		f := latestBackupFileName(c.ContainerName)
 
-		err = restoreBackup(d, f.Name())
+		err = restoreBackup(c, f.Name())
 		if err != nil {
 			logger.Error.Printf("%s: loading backup file to server: %s", name, err)
+
+			if err := c.Stop(); err != nil {
+				panic(err)
+			}
+
 			continue
 		}
 
-		if err = runServer(d); err != nil {
+		if err = runServer(c); err != nil {
 			logger.Error.Printf("%s: starting server process: %s", name, err)
+
+			if err := c.Stop(); err != nil {
+				panic(err)
+			}
+
 			continue
 		}
 
