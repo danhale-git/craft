@@ -42,7 +42,7 @@ func init() {
 	rootCmd.PersistentFlags().String("log", "",
 		"Path to the file where logs are saved.")
 
-	rootCmd.PersistentFlags().String("log-level", "error",
+	rootCmd.PersistentFlags().String("log-level", "info",
 		"Minimum severity of logs to output. [info|warn|error].")
 }
 

@@ -1,7 +1,9 @@
 package cmd
 
 import (
-	"log"
+	"strings"
+
+	"github.com/danhale-git/craft/internal/logger"
 
 	"github.com/danhale-git/craft/internal/docker"
 
@@ -11,39 +13,53 @@ import (
 func init() {
 	// stopCmd represents the stop command
 	stopCmd := &cobra.Command{
-		Use:   "stop <server>",
-		Short: "Back up and stop a running server",
+		Use:   "stop <servers...>",
+		Short: "Back up and stop a running server.",
 		Args: func(cmd *cobra.Command, args []string) error {
-			return cobra.RangeArgs(1, 1)(cmd, args)
+			return cobra.MinimumNArgs(1)(cmd, args)
 		},
-		RunE: func(cmd *cobra.Command, args []string) error {
-			d := docker.NewContainerOrExit(args[0])
-
-			noBackup, err := cmd.Flags().GetBool("no-backup")
-			if err != nil {
-				return err
-			}
-
-			// Attempt to back up the server unless instructed otherwise.
-			if !noBackup {
-				_, err = copyBackup(d)
-				if err != nil {
-					log.Fatalf("Error taking backup: %s", err)
-				}
-			}
-
-			// Stop the game server process
-			err = d.Command([]string{"stop"})
-			if err != nil {
-				log.Fatalf("Error running 'stop' command: %s", err)
-			}
-
-			// Stop the docker container
-			return d.Stop()
-		},
+		Run: StopCommand,
 	}
 
 	rootCmd.AddCommand(stopCmd)
 
 	stopCmd.Flags().Bool("no-backup", false, "Stop the server without backing up first.")
+}
+
+// StopCommand attempts to take a backup unless the no-backup flag is true. If the backup is successful the
+// server process is stopped then the docker container is stopped.
+func StopCommand(cmd *cobra.Command, args []string) {
+	stopped := make([]string, 0)
+
+	noBackup, err := cmd.Flags().GetBool("no-backup")
+	if err != nil {
+		panic(err)
+	}
+
+	for _, name := range args {
+		c := docker.NewContainerOrExit(name)
+
+		if !noBackup {
+			_, err = copyBackup(c)
+			if err != nil {
+				logger.Error.Printf("taking backup: %s", err)
+				continue
+			}
+		}
+
+		err = c.Command([]string{"stop"})
+		if err != nil {
+			logger.Error.Printf("running 'stop' command: %s", err)
+			continue
+		}
+
+		if err := c.Stop(); err != nil {
+			logger.Error.Printf("stopping container: %s", err)
+			continue
+		}
+
+		stopped = append(stopped, c.ContainerName)
+	}
+
+	logger.Info.Println("stopped:", strings.Join(stopped, " "))
 }
