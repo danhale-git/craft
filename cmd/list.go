@@ -7,6 +7,8 @@ import (
 	"os"
 	"text/tabwriter"
 
+	"github.com/danhale-git/craft/internal/logger"
+
 	"github.com/danhale-git/craft/internal/backup"
 
 	"github.com/danhale-git/craft/internal/docker"
@@ -61,14 +63,8 @@ func init() {
 				return
 			}
 
-			// List backed up servers
-			backupNames, err := backupServerNames()
-			if err != nil {
-				log.Fatalf("Error getting backups: %s", err)
-			}
-
-			for _, n := range backupNames {
-				// name is in activeNames
+			for _, n := range backupServerNames() {
+				// If n is in list of active server names
 				if func() bool {
 					for _, s := range servers {
 						if s.ContainerName == n {
@@ -104,12 +100,12 @@ func init() {
 }
 
 // backupServerNames returns a slice with the names of all backed up servers.
-func backupServerNames() ([]string, error) {
+func backupServerNames() []string {
 	backupDir := backupDirectory()
 	infos, err := ioutil.ReadDir(backupDir)
 
 	if err != nil {
-		return nil, fmt.Errorf("reading directory '%s': %s", backupDir, err)
+		logger.Panicf("reading directory '%s': %s", backupDir, err)
 	}
 
 	names := make([]string, 0)
@@ -122,5 +118,5 @@ func backupServerNames() ([]string, error) {
 		names = append(names, f.Name())
 	}
 
-	return names, nil
+	return names
 }

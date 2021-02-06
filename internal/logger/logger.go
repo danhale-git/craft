@@ -47,11 +47,24 @@ func Init(path, level, prefix string) {
 	switch strings.ToLower(level) {
 	case "info":
 		Info.SetOutput(out)
+		Warn.SetOutput(out)
+		Error.SetOutput(out)
 	case "warn":
 		Warn.SetOutput(out)
+		Error.SetOutput(out)
 	case "error":
 		Error.SetOutput(out)
 	default:
 		log.Fatalf("Invalid error level '%s': expected info|warn|error", level)
 	}
+}
+
+// Panic is a convenience wrapper for logger.Error.Panic().
+func Panic(v ...interface{}) {
+	Error.Panic(v...)
+}
+
+// Panicf is a convenience wrapper for logger.Error.Panicf().
+func Panicf(format string, v ...interface{}) {
+	Error.Panicf(format, v...)
 }

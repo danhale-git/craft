@@ -4,9 +4,10 @@ import (
 	"archive/zip"
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"strings"
+
+	"github.com/danhale-git/craft/internal/logger"
 
 	"github.com/danhale-git/craft/internal/backup"
 
@@ -30,61 +31,7 @@ func init() {
 			return cobra.RangeArgs(1, 1)(cmd, args)
 		},
 		// Create a new docker container, copy files and run the mc server binary
-		RunE: func(cmd *cobra.Command, args []string) error {
-			backups, err := backupServerNames()
-			if err != nil {
-				log.Fatalf("Error getting backups: %s", err)
-			}
-
-			// Check the server doesn't already exist
-			for _, b := range backups {
-				if args[0] == b {
-					fmt.Printf("Error: server name '%s' is in use by a backup, run 'craft list -a'", args[0])
-					os.Exit(0)
-				}
-			}
-
-			port, err := cmd.Flags().GetInt("port")
-			if err != nil {
-				return err
-			}
-
-			// Create a container for the server
-			c, err := docker.RunContainer(port, args[0])
-			if err != nil {
-				log.Fatalf("Error creating new container: %s", err)
-			}
-
-			mcworld, err := cmd.Flags().GetString("world")
-			if err != nil {
-				panic(err)
-			}
-
-			// Copy the world files to the server
-			if mcworld != "" {
-				checkWorldFiles(mcworld)
-				// Open backup zip
-				zr, err := zip.OpenReader(mcworld)
-				if err != nil {
-					return err
-				}
-
-				if err = backup.Restore(&zr.Reader, c.CopyTo, true); err != nil {
-					return err
-				}
-
-				if err = zr.Close(); err != nil {
-					return fmt.Errorf("closing zip: %s", err)
-				}
-			}
-
-			// Run the server process
-			if err = runServer(c); err != nil {
-				log.Fatalf("Error starting server process: %s", err)
-			}
-
-			return nil
-		},
+		Run: RunCommand,
 	}
 
 	rootCmd.AddCommand(runCmd)
@@ -93,27 +40,96 @@ func init() {
 	runCmd.Flags().String("world", "", "Path to a .mcworld file to be loaded.")
 }
 
-func checkWorldFiles(mcworld string) {
+func RunCommand(cmd *cobra.Command, args []string) {
+	// Check the server doesn't already exist
+	for _, b := range backupServerNames() {
+		if args[0] == b {
+			logger.Error.Fatalf("server name '%s' is in use by a backup, run 'craft list -a'", args[0])
+		}
+	}
+
+	port, err := cmd.Flags().GetInt("port")
+	if err != nil {
+		logger.Panic(err)
+	}
+
+	// Create a container for the server
+	c, err := docker.RunContainer(port, args[0])
+	if err != nil {
+		logger.Error.Fatalf("creating new container: %s", err)
+	}
+
+	mcworld, err := cmd.Flags().GetString("world")
+	if err != nil {
+		logger.Panic(err)
+	}
+
+	// Copy the world files to the server
+	if mcworld != "" {
+		if err := checkWorldFiles(mcworld); err != nil {
+			logger.Error.Printf("invalid mcworld file: %s", err)
+
+			if err := c.Stop(); err != nil {
+				panic(err)
+			}
+
+			os.Exit(0)
+		}
+
+		// Open backup zip
+		zr, err := zip.OpenReader(mcworld)
+		if err != nil {
+			logger.Panic(err)
+		}
+
+		if err = backup.Restore(&zr.Reader, c.CopyTo, true); err != nil {
+			logger.Error.Printf("restoring backup: %s", err)
+
+			if err := c.Stop(); err != nil {
+				panic(err)
+			}
+
+			os.Exit(1)
+		}
+
+		if err = zr.Close(); err != nil {
+			logger.Panicf("closing zip: %s", err)
+		}
+	}
+
+	// Run the server process
+	if err = runServer(c); err != nil {
+		logger.Error.Fatalf("starting server process: %s", err)
+	}
+}
+
+func checkWorldFiles(mcworld string) error {
 	expected := map[string]bool{
-		"db":            false,
+		"db/CURRENT":    false,
 		"level.dat":     false,
 		"levelname.txt": false,
 	}
 
 	zr, err := zip.OpenReader(mcworld)
 	if err != nil {
-		log.Fatalf("Error checking world files: %s", err)
+		return fmt.Errorf("failed to open zip: %s", err)
 	}
 
 	for _, f := range zr.File {
 		expected[f.Name] = true
 	}
 
-	if !(expected["db"] &&
+	if !(expected["db/CURRENT"] &&
 		expected["level.dat"] &&
 		expected["levelname.txt"]) {
-		log.Fatalf("Invalid world file: missing one of: db, level.dat, levelname.txt")
+		return fmt.Errorf("missing one of: db, level.dat, levelname.txt")
 	}
+
+	if err = zr.Close(); err != nil {
+		return fmt.Errorf("failed to close zip: %s", err)
+	}
+
+	return nil
 }
 
 // runServer executes the server binary and waits for the server to be ready before returning.
