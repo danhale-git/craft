@@ -1,7 +1,9 @@
 package cmd
 
 import (
-	"log"
+	"strings"
+
+	"github.com/danhale-git/craft/internal/logger"
 
 	"github.com/danhale-git/craft/internal/docker"
 
@@ -13,6 +15,11 @@ func init() {
 	startCmd := &cobra.Command{
 		Use:   "start <servers...>",
 		Short: "Start a stopped server.",
+		Long: `Start creates a new server from the latest backup for the given server name(s).
+
+If no port is specified then an unused one will be chosen. Whether the port is unused is determined by examining all
+other craft containers. The lowest available port between 19132 and 19232 will be assigned.
+If multiple arguments are provided, the --port flag is ignored and ports are assigned automatically.`,
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.MinimumNArgs(1)(cmd, args)
 		},
@@ -21,31 +28,48 @@ func init() {
 
 	rootCmd.AddCommand(startCmd)
 
-	startCmd.Flags().IntP("port", "p", 0, "External port players connect to.")
+	startCmd.Flags().IntP("port", "p", 0,
+		"External port for players connect to. Default (0 value) is to auto-assign a port.")
 }
 
 func StartCommand(cmd *cobra.Command, args []string) {
-	for _, name := range args {
-		// Create a container for the server
-		port, err := cmd.Flags().GetInt("port")
+	started := make([]string, 0)
+
+	var port int
+
+	var err error
+
+	if len(args) > 1 {
+		port = 0
+	} else {
+		port, err = cmd.Flags().GetInt("port")
 		if err != nil {
 			panic(err)
 		}
+	}
 
+	for _, name := range args {
 		d, err := docker.RunContainer(port, name)
 		if err != nil {
-			log.Fatalf("Error running server: %s", err)
+			logger.Error.Printf("%s: running server: %s", name, err)
+			continue
 		}
 
 		f := latestBackupFileName(d.ContainerName)
 
 		err = restoreBackup(d, f.Name())
 		if err != nil {
-			log.Fatalf("Error loading backup file to server: %s", err)
+			logger.Error.Printf("%s: loading backup file to server: %s", name, err)
+			continue
 		}
 
 		if err = runServer(d); err != nil {
-			log.Fatalf("Error starting server process: %s", err)
+			logger.Error.Printf("%s: starting server process: %s", name, err)
+			continue
 		}
+
+		started = append(started, name)
 	}
+
+	logger.Info.Println("started:", strings.Join(started, " "))
 }

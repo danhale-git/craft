@@ -23,7 +23,8 @@ func init() {
 
 	rootCmd.AddCommand(stopCmd)
 
-	stopCmd.Flags().Bool("no-backup", false, "Stop the server without backing up first.")
+	stopCmd.Flags().Bool("no-backup", false,
+		"Stop the server without backing up first.")
 }
 
 // StopCommand attempts to take a backup unless the no-backup flag is true. If the backup is successful the
@@ -42,19 +43,19 @@ func StopCommand(cmd *cobra.Command, args []string) {
 		if !noBackup {
 			_, err = copyBackup(c)
 			if err != nil {
-				logger.Error.Printf("taking backup: %s", err)
+				logger.Error.Printf("%s: taking backup: %s", name, err)
 				continue
 			}
 		}
 
 		err = c.Command([]string{"stop"})
 		if err != nil {
-			logger.Error.Printf("running 'stop' command: %s", err)
+			logger.Error.Printf("%s: running 'stop' command: %s", name, err)
 			continue
 		}
 
 		if err := c.Stop(); err != nil {
-			logger.Error.Printf("stopping container: %s", err)
+			logger.Error.Printf("%s: stopping container: %s", name, err)
 			continue
 		}
 
