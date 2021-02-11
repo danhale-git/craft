@@ -82,7 +82,7 @@ func RunCommand(cmd *cobra.Command, args []string) {
 			logger.Panic(err)
 		}
 
-		if err = backup.Restore(&zr.Reader, c.CopyTo, true); err != nil {
+		if err = backup.RestoreMCWorld(&zr.Reader, c.CopyTo); err != nil {
 			logger.Error.Printf("restoring backup: %s", err)
 
 			if err := c.Stop(); err != nil {
