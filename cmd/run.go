@@ -4,7 +4,6 @@ import (
 	"archive/zip"
 	"bufio"
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/danhale-git/craft/internal/logger"
@@ -38,6 +37,7 @@ func init() {
 
 	runCmd.Flags().IntP("port", "p", 0, "External port players connect to.")
 	runCmd.Flags().String("world", "", "Path to a .mcworld file to be loaded.")
+	runCmd.Flags().StringSlice("prop", nil, "A server.properties field e.g. --prop gamemode=survival")
 }
 
 func RunCommand(cmd *cobra.Command, args []string) {
@@ -64,43 +64,52 @@ func RunCommand(cmd *cobra.Command, args []string) {
 		logger.Panic(err)
 	}
 
-	// Copy the world files to the server
+	// Copy world files to the server
 	if mcworld != "" {
-		if err := checkWorldFiles(mcworld); err != nil {
-			logger.Error.Printf("invalid mcworld file: %s", err)
-
+		if err := loadMCWorldFile(mcworld, c); err != nil {
 			if err := c.Stop(); err != nil {
 				panic(err)
 			}
 
-			os.Exit(0)
+			logger.Error.Fatalf("loading world file")
 		}
+	}
 
-		// Open backup zip
-		zr, err := zip.OpenReader(mcworld)
-		if err != nil {
-			logger.Panic(err)
-		}
+	props, err := cmd.Flags().GetStringSlice("prop")
+	if err != nil {
+		panic(err)
+	}
 
-		if err = backup.RestoreMCWorld(&zr.Reader, c.CopyTo); err != nil {
-			logger.Error.Printf("restoring backup: %s", err)
-
-			if err := c.Stop(); err != nil {
-				panic(err)
-			}
-
-			os.Exit(1)
-		}
-
-		if err = zr.Close(); err != nil {
-			logger.Panicf("closing zip: %s", err)
-		}
+	if err := setServerProperties(props, c); err != nil {
+		logger.Error.Fatalf("setting server properties: %s", err)
 	}
 
 	// Run the server process
 	if err = runServer(c); err != nil {
 		logger.Error.Fatalf("starting server process: %s", err)
 	}
+}
+
+func loadMCWorldFile(mcworld string, c *docker.Container) error {
+	if err := checkWorldFiles(mcworld); err != nil {
+		return fmt.Errorf("invalid mcworld file: %s", err)
+	}
+
+	// Open backup zip
+	zr, err := zip.OpenReader(mcworld)
+	if err != nil {
+		logger.Panic(err)
+	}
+
+	if err = backup.RestoreMCWorld(&zr.Reader, c.CopyTo); err != nil {
+		return fmt.Errorf("restoring backup: %s", err)
+	}
+
+	if err = zr.Close(); err != nil {
+		logger.Panicf("closing zip: %s", err)
+	}
+
+	return nil
 }
 
 func checkWorldFiles(mcworld string) error {
