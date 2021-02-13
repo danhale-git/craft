@@ -11,6 +11,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -116,12 +117,12 @@ func (d *Container) CopyFrom(containerPath string) (*tar.Reader, error) {
 }
 
 // CopyFileTo archives the given bytes as a tar containing one file and copies that file to the destination path.
-func (d *Container) CopyFileTo(destPath, name string, body []byte) error {
+func (d *Container) CopyFileTo(containerPath string, body []byte) error {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 
 	hdr := &tar.Header{
-		Name: name,
+		Name: filepath.Base(containerPath),
 		Size: int64(len(body)),
 	}
 	if err := tw.WriteHeader(hdr); err != nil {
@@ -132,7 +133,7 @@ func (d *Container) CopyFileTo(destPath, name string, body []byte) error {
 		return fmt.Errorf("writing body: %s", err)
 	}
 
-	return d.CopyTo(destPath, &buf)
+	return d.CopyTo(filepath.Dir(containerPath), &buf)
 }
 
 // CopyTo copies the given tar data to the destination path in the container.

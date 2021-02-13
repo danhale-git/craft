@@ -45,64 +45,68 @@ func FileTime(name string) (time.Time, error) {
 }
 
 // Restore reads from the given zip.ReadCloser, copying each of the files to the directory containing the server
-// files. If the mcworld parameter is true, the destination path is prefixed with the world directory to support valid
-// .mcworld zip files.
-func Restore(zr *zip.Reader, copyToFunc func(string, *bytes.Buffer) error, mcworld bool) error {
-	// Write zipped files to tar archive
+// files.
+func Restore(zr *zip.Reader, copyToFunc func(string, *bytes.Buffer) error) error {
 	for _, f := range zr.File {
-		var data bytes.Buffer
-		tw := tar.NewWriter(&data)
-
-		file, err := f.Open()
-		if err != nil {
-			return err
-		}
-
-		b, err := ioutil.ReadAll(file)
-		if err != nil {
-			return err
-		}
-
-		// Create tar file
-		name := filepath.Base(f.Name)
-		dir := filepath.Dir(f.Name)
-
-		hdr := &tar.Header{
-			Name: name,
-			Size: int64(len(b)),
-		}
-		if err := tw.WriteHeader(hdr); err != nil {
-			return err
-		}
-
-		if _, err := tw.Write(b); err != nil {
-			return err
-		}
-
-		// Close zipped file and tar writer
-		if err = file.Close(); err != nil {
-			return err
-		}
-
-		if err = tw.Close(); err != nil {
-			return err
-		}
-
-		// Handle .mcworld files
-		var pathPrefix string
-		if mcworld {
-			pathPrefix = server.FilePaths.DefaultWorld
-		} else {
-			pathPrefix = server.RootDirectory
-		}
-
-		err = copyToFunc(filepath.Join(pathPrefix, dir), &data)
-		if err != nil {
-			return err
+		if err := restoreFile(f, server.RootDirectory, copyToFunc); err != nil {
+			return fmt.Errorf("restoring %s: %s", f.Name, err)
 		}
 	}
 
 	return nil
+}
+
+// Restore reads from the given zip.ReadCloser, copying each of the files to the default world directory.
+func RestoreMCWorld(zr *zip.Reader, copyToFunc func(string, *bytes.Buffer) error) error {
+	for _, f := range zr.File {
+		if err := restoreFile(f, server.FilePaths.DefaultWorld, copyToFunc); err != nil {
+			return fmt.Errorf("restoring %s: %s", f.Name, err)
+		}
+	}
+
+	return nil
+}
+
+func restoreFile(f *zip.File, dest string, copyToFunc func(string, *bytes.Buffer) error) error {
+	var data bytes.Buffer
+	tw := tar.NewWriter(&data)
+
+	file, err := f.Open()
+	if err != nil {
+		return err
+	}
+
+	b, err := ioutil.ReadAll(file)
+	if err != nil {
+		return err
+	}
+
+	// Create tar file
+	name := filepath.Base(f.Name)
+	dir := filepath.Dir(f.Name)
+
+	hdr := &tar.Header{
+		Name: name,
+		Size: int64(len(b)),
+	}
+	if err := tw.WriteHeader(hdr); err != nil {
+		return err
+	}
+
+	if _, err := tw.Write(b); err != nil {
+		return err
+	}
+
+	// Close zipped file and tar writer
+	if err = file.Close(); err != nil {
+		return err
+	}
+
+	if err = tw.Close(); err != nil {
+		return err
+	}
+
+	return copyToFunc(filepath.Join(dest, dir), &data)
 }
 
 // Copy runs the set of queries described in the bedrock server documentation for taking a backup without server

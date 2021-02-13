@@ -5,12 +5,18 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
+	"fmt"
+	"io"
 	"log"
+	"path"
+	"sort"
 	"testing"
 	"time"
 
 	server2 "github.com/danhale-git/craft/internal/server"
 )
+
+const mockTarContent = "some content"
 
 func TestFileTime(t *testing.T) {
 	valid := "test_01-02-2021_18-43.zip"
@@ -42,35 +48,94 @@ func TestFileTime(t *testing.T) {
 
 // TODO: test that restore supports .mcworld files
 func TestRestore(t *testing.T) {
-	got := 0
-	copyToFunc := func(string, *bytes.Buffer) error {
-		// count the number of files copies
-		got++
-		return nil
-	}
-
 	// zip data and count of zipped files
-	z, want := mockZip(map[string]string{
-		"db/MANIFEST-000051":                 "some content",
-		"worlds/Bedrock level/db/000050.ldb": "some content",
-		"worlds/Bedrock level/db/000053.log": "some content",
-		"worlds/Bedrock level/db/000052.ldb": "some content",
-		"worlds/Bedrock level/db/CURRENT":    "some content",
-		"worlds/Bedrock level/level.dat":     "some content",
-		"worlds/Bedrock level/level.dat_old": "some content",
-		"worlds/Bedrock level/levelname.txt": "some content",
+	zippedBackup := mockZip(map[string]string{
+		"worlds/Bedrock level/db/MANIFEST-000051": mockTarContent,
+		"worlds/Bedrock level/db/000050.ldb":      mockTarContent,
+		"worlds/Bedrock level/db/000053.log":      mockTarContent,
+		"worlds/Bedrock level/db/000052.ldb":      mockTarContent,
+		"worlds/Bedrock level/db/CURRENT":         mockTarContent,
+		"worlds/Bedrock level/level.dat":          mockTarContent,
+		"worlds/Bedrock level/level.dat_old":      mockTarContent,
+		"worlds/Bedrock level/levelname.txt":      mockTarContent,
 	})
 
-	if err := Restore(z, copyToFunc, false); err != nil {
-		t.Errorf("error returned when calling with valid input: %s", err)
+	// zip data and count of zipped files
+	zippedMCWorld := mockZip(map[string]string{
+		"db/MANIFEST-000051": mockTarContent,
+		"db/000050.ldb":      mockTarContent,
+		"db/000053.log":      mockTarContent,
+		"db/000052.ldb":      mockTarContent,
+		"db/CURRENT":         mockTarContent,
+		"level.dat":          mockTarContent,
+		"level.dat_old":      mockTarContent,
+		"levelname.txt":      mockTarContent,
+	})
+
+	backupNames, err := testRestoreFunc(zippedBackup, Restore)
+	if err != nil {
+		t.Error(err)
 	}
 
-	if got != want {
-		t.Errorf("unexpected count of copyToFunc calls, got %d: want %d", got, want)
+	mcWorldNames, err := testRestoreFunc(zippedMCWorld, RestoreMCWorld)
+	if err != nil {
+		t.Error(err)
+	}
+
+	sort.Strings(backupNames)
+	sort.Strings(mcWorldNames)
+
+	// World files should be delivered consistently from mcworld and craft backup zips
+	for i := 0; i < len(backupNames); i++ {
+		if backupNames[i] != mcWorldNames[i] {
+			t.Errorf(
+				"mcworld destination path is different to equivalent backup destination path: '%s' != '%s'",
+				mcWorldNames[i],
+				backupNames[i],
+			)
+		}
 	}
 }
 
-func mockZip(files map[string]string) (*zip.Reader, int) {
+func testRestoreFunc(z *zip.Reader, restoreFunc func(*zip.Reader, func(string, *bytes.Buffer) error) error) ([]string, error) {
+	fileNames := make([]string, len(z.File))
+
+	count := 0
+	copyToFunc := func(dest string, buf *bytes.Buffer) error {
+		// Open and iterate through the files in the tar archive
+		tr := tar.NewReader(buf)
+
+		for {
+			hdr, err := tr.Next()
+			if err == io.EOF {
+				break // End of archive
+			}
+
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			fileNames[count] = path.Join(dest, hdr.Name)
+		}
+
+		// count the number of files copies
+		count++
+
+		return nil
+	}
+
+	if err := restoreFunc(z, copyToFunc); err != nil {
+		return nil, fmt.Errorf("error returned when calling with valid input: %s", err)
+	}
+
+	if count != len(z.File) {
+		return nil, fmt.Errorf("unexpected count of copyToFunc calls, count %d: want %d", count, len(z.File))
+	}
+
+	return fileNames, nil
+}
+
+func mockZip(files map[string]string) *zip.Reader {
 	buf := new(bytes.Buffer)
 	w := zip.NewWriter(buf)
 
@@ -96,7 +161,7 @@ func mockZip(files map[string]string) (*zip.Reader, int) {
 		log.Fatal(err)
 	}
 
-	return r, len(files)
+	return r
 }
 
 func TestCopy(t *testing.T) {

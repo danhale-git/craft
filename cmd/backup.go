@@ -49,7 +49,7 @@ Use the trim and skip-trim-file-removal-check flags with linux cron or windows t
 			return cobra.MinimumNArgs(1)(cmd, args)
 		},
 		// save the world files to a backup archive
-		Run: RunCommand,
+		Run: BackupCommand,
 	}
 
 	backupCmd.Flags().IntP("trim", "t", 0,
@@ -61,7 +61,7 @@ Use the trim and skip-trim-file-removal-check flags with linux cron or windows t
 	rootCmd.AddCommand(backupCmd)
 }
 
-func RunCommand(cmd *cobra.Command, args []string) {
+func BackupCommand(cmd *cobra.Command, args []string) {
 	created := make([]string, 0)
 	deleted := make([]string, 0)
 
@@ -240,9 +240,13 @@ func copyBackup(d *docker.Container) (string, error) {
 
 	// Copy server files and write as zip data
 	if err = backup.Copy(f, c, l, d.CopyFrom, serverFiles); err != nil {
+		if err := f.Close(); err != nil {
+			logger.Error.Printf("failed to close backup file after error")
+		}
+
 		// Clean up bad backup file
 		if err := os.Remove(backupFilePath); err != nil {
-			log.Panicf("failed to remove file after error in backup process: %s", err)
+			logger.Error.Printf("failed to remove backup file after error: %s", err)
 		}
 
 		return "", err
@@ -261,7 +265,7 @@ func restoreBackup(d *docker.Container, backupName string) error {
 		return err
 	}
 
-	if err = backup.Restore(&zr.Reader, d.CopyTo, false); err != nil {
+	if err = backup.Restore(&zr.Reader, d.CopyTo); err != nil {
 		return err
 	}
 
