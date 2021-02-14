@@ -4,36 +4,12 @@ import (
 	"log"
 	"strings"
 
-	"github.com/danhale-git/craft/internal/logger"
-
 	"github.com/danhale-git/craft/internal/configure"
 	"github.com/danhale-git/craft/internal/docker"
 	"github.com/danhale-git/craft/internal/server"
-
-	"github.com/spf13/cobra"
 )
 
 // configureCmd represents the configure command
-var configureCmd = &cobra.Command{
-	Use:   "configure",
-	Short: "Configure server properties, whitelist and mods.",
-	Args: func(cmd *cobra.Command, args []string) error {
-		return cobra.RangeArgs(1, 1)(cmd, args)
-	},
-	Run: func(cmd *cobra.Command, args []string) {
-		c := docker.NewContainerOrExit(args[0])
-
-		props, err := cmd.Flags().GetStringSlice("prop")
-		if err != nil {
-			panic(err)
-		}
-
-		if err := setServerProperties(props, c); err != nil {
-			logger.Error.Fatalf("setting server properties: %s", err)
-		}
-	},
-}
-
 func setServerProperties(propFlags []string, c *docker.Container) error {
 	if len(propFlags) > 0 {
 		k := make([]string, len(propFlags))
@@ -65,10 +41,4 @@ func setServerProperties(propFlags []string, c *docker.Container) error {
 	}
 
 	return nil
-}
-
-func init() {
-	rootCmd.AddCommand(configureCmd)
-
-	configureCmd.Flags().StringSlice("prop", []string{}, "A server property name and value e.g. 'gamemode=creative'.")
 }

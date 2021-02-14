@@ -1,15 +1,98 @@
 package cmd
 
 import (
+	"fmt"
+	"io"
+	"log"
+	"os"
+	"text/tabwriter"
+
+	"github.com/danhale-git/craft/internal/backup"
+
 	"github.com/danhale-git/craft/internal/docker"
+	"github.com/danhale-git/craft/internal/logger"
 	"github.com/spf13/cobra"
 )
 
-// cmdCmd represents the cmd command
-func init() {
-	cmdCmd := &cobra.Command{
-		Use:     "cmd <server> <mc command>",
-		Example: "craft cmd myserver give PlayerName stone 1",
+func InitCobra() *cobra.Command {
+	rootCmd := NewRootCmd()
+
+	// Call all constructor functions
+	for _, f := range commands() {
+		rootCmd.AddCommand(f())
+	}
+
+	return rootCmd
+}
+
+func commands() []func() *cobra.Command {
+	return []func() *cobra.Command{
+		NewRootCmd,
+		NewRunCmd,
+		NewCommandCmd,
+		NewBackupCmd,
+		NewStartCmd,
+		NewStopCmd,
+		NewLogsCmd,
+		NewListCmd,
+		NewConfigureCmd,
+		NewVersionCmd,
+	}
+}
+
+func NewRootCmd() *cobra.Command {
+	rootCmd := &cobra.Command{
+		Use: "craft",
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			logPath, err := cmd.Flags().GetString("log")
+			if err != nil {
+				panic(fmt.Sprintln(cmd.Name(), err))
+			}
+
+			logLevel, err := cmd.Flags().GetString("log-level")
+			if err != nil {
+				panic(err)
+			}
+
+			logger.Init(logPath, logLevel, fmt.Sprintf("[%s]", cmd.Name()))
+		},
+	}
+
+	rootCmd.PersistentFlags().String("log", "",
+		"Path to the file where logs are saved.")
+
+	rootCmd.PersistentFlags().String("log-level", "info",
+		"Minimum severity of logs to output. [info|warn|error].")
+
+	return rootCmd
+}
+
+func NewRunCmd() *cobra.Command {
+	// runCmd represents the run command
+	runCmd := &cobra.Command{
+		Use:   "run <server name>",
+		Short: "Create a new server",
+		Long:  "Defaults to a new default world. .mcworld file and optional server.properties may be provided.",
+		// Require exactly one argument
+		Args: func(cmd *cobra.Command, args []string) error {
+			return cobra.RangeArgs(1, 1)(cmd, args)
+		},
+		// Create a new docker container, copy files and run the mc server binary
+		Run: RunCommand,
+	}
+
+	runCmd.Flags().IntP("port", "p", 0, "External port players connect to.")
+	runCmd.Flags().String("world", "", "Path to a .mcworld file to be loaded.")
+	runCmd.Flags().StringSlice("prop", nil, "A server.properties field e.g. --prop gamemode=survival")
+
+	return runCmd
+}
+
+func NewCommandCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "command <server> <mc command>",
+		Aliases: []string{"cmd"},
+		Example: "craft command myserver give PlayerName stone 1",
 		Short:   "Run a command on a server",
 		Long: `
 The first argument is the serer name.
@@ -33,6 +116,219 @@ Any number of following arguments may be provided as a mc server command.`,
 			return nil
 		},
 	}
+}
 
-	rootCmd.AddCommand(cmdCmd)
+func NewBackupCmd() *cobra.Command {
+	backupCmd := &cobra.Command{
+		Use:   "backup <server names...>",
+		Short: "Take a backup",
+		Long: `
+Save the current world and server.properties to a zip file in the backup directory.
+If two backups are taken in the same minute, the second will overwrite the first.
+Backups are saved to a default directory under the user's home directory.
+The backed up world is usually a few seconds behind the world state at the time of backup.
+Use the trim and skip-trim-file-removal-check flags with linux cron or windows task scheduler to automate backups.`,
+		Args: func(cmd *cobra.Command, args []string) error {
+			return cobra.MinimumNArgs(1)(cmd, args)
+		},
+		// save the world files to a backup archive
+		Run: BackupCommand,
+	}
+
+	backupCmd.Flags().IntP("trim", "t", 0,
+		"Delete the oldest backup files, leaving the given count of newest files in place.")
+	backupCmd.Flags().Bool("skip-trim-file-removal-check", false,
+		"Don't prompt the user before removing files. Useful for automating backups.")
+	backupCmd.Flags().BoolP("list", "l", false,
+		"List backup files and take no other action.")
+
+	return backupCmd
+}
+
+func NewStartCmd() *cobra.Command {
+	// startCmd represents the start command
+	startCmd := &cobra.Command{
+		Use:   "start <servers...>",
+		Short: "Start a stopped server.",
+		Long: `Start creates a new server from the latest backup for the given server name(s).
+
+If no port is specified then an unused one will be chosen. Whether the port is unused is determined by examining all
+other craft containers. The lowest available port between 19132 and 19232 will be assigned.
+If multiple arguments are provided, the --port flag is ignored and ports are assigned automatically.`,
+		Args: func(cmd *cobra.Command, args []string) error {
+			return cobra.MinimumNArgs(1)(cmd, args)
+		},
+		Run: StartCommand,
+	}
+
+	startCmd.Flags().IntP("port", "p", 0,
+		"External port for players connect to. Default (0 value) is to auto-assign a port.")
+
+	return startCmd
+}
+
+func NewStopCmd() *cobra.Command {
+	// stopCmd represents the stop command
+	stopCmd := &cobra.Command{
+		Use:   "stop <servers...>",
+		Short: "Back up and stop a running server.",
+		Args: func(cmd *cobra.Command, args []string) error {
+			return cobra.MinimumNArgs(1)(cmd, args)
+		},
+		Run: StopCommand,
+	}
+
+	stopCmd.Flags().Bool("no-backup", false,
+		"Stop the server without backing up first.")
+
+	return stopCmd
+}
+
+func NewLogsCmd() *cobra.Command {
+	logsCmd := &cobra.Command{
+		Use:   "logs <server>",
+		Short: "Output server logs",
+		// Accept only one argument
+		Args: func(cmd *cobra.Command, args []string) error {
+			return cobra.ExactArgs(1)(cmd, args)
+		},
+		// Read logs from a container and copy them to stdout
+		Run: func(cmd *cobra.Command, args []string) {
+			c := docker.NewContainerOrExit(args[0])
+
+			tail, err := cmd.Flags().GetInt("tail")
+			if err != nil {
+				panic(err)
+			}
+
+			logs, err := c.LogReader(tail)
+			if err != nil {
+				log.Fatalf("Error reading logs from server: %s", err)
+			}
+
+			if _, err := io.Copy(os.Stdout, logs); err != nil {
+				log.Fatalf("Error copying server output to stdout: %s", err)
+			}
+		},
+	}
+
+	logsCmd.Flags().IntP("tail", "t", 20,
+		"The number of previous log lines to print immediately.")
+
+	return logsCmd
+}
+
+func NewListCmd() *cobra.Command {
+	// listCmd represents the list command
+	listCmd := &cobra.Command{
+		Use:   "list <server>",
+		Short: "List servers",
+		Run: func(cmd *cobra.Command, args []string) {
+			w := tabwriter.NewWriter(os.Stdout, 3, 3, 3, ' ', tabwriter.TabIndent)
+
+			// List running servers
+			servers, err := docker.ActiveServerClients()
+			if err != nil {
+				log.Fatalf("Error getting server clients: %s", err)
+			}
+
+			for _, s := range servers {
+				c, err := docker.NewContainer(s.ContainerName)
+				if err != nil {
+					log.Fatalf("Error creating docker client for container '%s': %s", s.ContainerName, err)
+				}
+
+				port, err := c.GetPort()
+				if err != nil {
+					log.Fatalf("Error getting port for container '%s': '%s'", s.ContainerName, err)
+				}
+
+				if _, err := fmt.Fprintf(w, "%s\trunning - port %d\n", s.ContainerName, port); err != nil {
+					log.Fatalf("Error writing to table: %s", err)
+				}
+			}
+
+			all, err := cmd.Flags().GetBool("all")
+			if err != nil {
+				panic(err)
+			}
+
+			if !all {
+				if err = w.Flush(); err != nil {
+					log.Fatalf("Error writing output to console: %s", err)
+				}
+
+				return
+			}
+
+			for _, n := range backupServerNames() {
+				// If n is in list of active server names
+				if func() bool {
+					for _, s := range servers {
+						if s.ContainerName == n {
+							return true
+						}
+					}
+					return false
+				}() {
+					continue
+				}
+
+				f := latestBackupFileName(n)
+
+				t, err := backup.FileTime(f.Name())
+				if err != nil {
+					panic(err)
+				}
+
+				if _, err := fmt.Fprintf(w, "%s\tstopped - %s\n", n, t.Format(timeFormat)); err != nil {
+					log.Fatalf("Error writing to table: %s", err)
+				}
+			}
+
+			if err = w.Flush(); err != nil {
+				log.Fatalf("Error writing output to console: %s", err)
+			}
+		},
+	}
+
+	listCmd.Flags().BoolP("all", "a", false, "Show all servers. Defaults to only running servers.")
+
+	return listCmd
+}
+
+func NewConfigureCmd() *cobra.Command {
+	configureCmd := &cobra.Command{
+		Use:   "configure",
+		Short: "Configure server properties, whitelist and mods.",
+		Args: func(cmd *cobra.Command, args []string) error {
+			return cobra.RangeArgs(1, 1)(cmd, args)
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			c := docker.NewContainerOrExit(args[0])
+
+			props, err := cmd.Flags().GetStringSlice("prop")
+			if err != nil {
+				panic(err)
+			}
+
+			if err := setServerProperties(props, c); err != nil {
+				logger.Error.Fatalf("setting server properties: %s", err)
+			}
+		},
+	}
+
+	configureCmd.Flags().StringSlice("prop", []string{}, "A server property name and value e.g. 'gamemode=creative'.")
+
+	return configureCmd
+}
+
+func NewVersionCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "version",
+		Short: "Show the current craft version.",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println("craft version 0.1.0")
+		},
+	}
 }

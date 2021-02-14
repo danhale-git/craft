@@ -34,33 +34,6 @@ var serverFiles = []string{
 	server2.FileNames.ServerProperties, // server.properties
 }
 
-// backupCmd represents the backup command
-func init() {
-	backupCmd := &cobra.Command{
-		Use:   "backup <server names...>",
-		Short: "Take a backup",
-		Long: `
-Save the current world and server.properties to a zip file in the backup directory.
-If two backups are taken in the same minute, the second will overwrite the first.
-Backups are saved to a default directory under the user's home directory.
-The backed up world is usually a few seconds behind the world state at the time of backup.
-Use the trim and skip-trim-file-removal-check flags with linux cron or windows task scheduler to automate backups.`,
-		Args: func(cmd *cobra.Command, args []string) error {
-			return cobra.MinimumNArgs(1)(cmd, args)
-		},
-		// save the world files to a backup archive
-		Run: BackupCommand,
-	}
-
-	backupCmd.Flags().IntP("trim", "t", 0,
-		"Delete the oldest backup files, leaving the given count of newest files in place.")
-	backupCmd.Flags().Bool("skip-trim-file-removal-check", false,
-		"Don't prompt the user before removing files. Useful for automating backups.")
-	backupCmd.Flags().BoolP("list", "l", false,
-		"List backup files and take no other action.")
-	rootCmd.AddCommand(backupCmd)
-}
-
 func BackupCommand(cmd *cobra.Command, args []string) {
 	created := make([]string, 0)
 	deleted := make([]string, 0)

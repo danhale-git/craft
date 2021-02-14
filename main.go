@@ -15,8 +15,18 @@ limitations under the License.
 */
 package main
 
-import "github.com/danhale-git/craft/cmd"
+import (
+	"fmt"
+	"os"
+
+	"github.com/danhale-git/craft/cmd"
+)
 
 func main() {
-	cmd.Execute()
+	rootCmd := cmd.InitCobra()
+
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
 }

@@ -10,23 +10,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func init() {
-	// stopCmd represents the stop command
-	stopCmd := &cobra.Command{
-		Use:   "stop <servers...>",
-		Short: "Back up and stop a running server.",
-		Args: func(cmd *cobra.Command, args []string) error {
-			return cobra.MinimumNArgs(1)(cmd, args)
-		},
-		Run: StopCommand,
-	}
-
-	rootCmd.AddCommand(stopCmd)
-
-	stopCmd.Flags().Bool("no-backup", false,
-		"Stop the server without backing up first.")
-}
-
 // StopCommand attempts to take a backup unless the no-backup flag is true. If the backup is successful the
 // server process is stopped then the docker container is stopped.
 func StopCommand(cmd *cobra.Command, args []string) {

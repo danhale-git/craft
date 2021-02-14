@@ -10,28 +10,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func init() {
-	// startCmd represents the start command
-	startCmd := &cobra.Command{
-		Use:   "start <servers...>",
-		Short: "Start a stopped server.",
-		Long: `Start creates a new server from the latest backup for the given server name(s).
-
-If no port is specified then an unused one will be chosen. Whether the port is unused is determined by examining all
-other craft containers. The lowest available port between 19132 and 19232 will be assigned.
-If multiple arguments are provided, the --port flag is ignored and ports are assigned automatically.`,
-		Args: func(cmd *cobra.Command, args []string) error {
-			return cobra.MinimumNArgs(1)(cmd, args)
-		},
-		Run: StartCommand,
-	}
-
-	rootCmd.AddCommand(startCmd)
-
-	startCmd.Flags().IntP("port", "p", 0,
-		"External port for players connect to. Default (0 value) is to auto-assign a port.")
-}
-
 func StartCommand(cmd *cobra.Command, args []string) {
 	started := make([]string, 0)
 

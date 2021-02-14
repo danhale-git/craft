@@ -19,27 +19,6 @@ const (
 	RunMCCommand = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server"
 )
 
-func init() {
-	// runCmd represents the run command
-	runCmd := &cobra.Command{
-		Use:   "run <server name>",
-		Short: "Create a new server",
-		Long:  "Defaults to a new default world. .mcworld file and optional server.properties may be provided.",
-		// Require exactly one argument
-		Args: func(cmd *cobra.Command, args []string) error {
-			return cobra.RangeArgs(1, 1)(cmd, args)
-		},
-		// Create a new docker container, copy files and run the mc server binary
-		Run: RunCommand,
-	}
-
-	rootCmd.AddCommand(runCmd)
-
-	runCmd.Flags().IntP("port", "p", 0, "External port players connect to.")
-	runCmd.Flags().String("world", "", "Path to a .mcworld file to be loaded.")
-	runCmd.Flags().StringSlice("prop", nil, "A server.properties field e.g. --prop gamemode=survival")
-}
-
 func RunCommand(cmd *cobra.Command, args []string) {
 	// Check the server doesn't already exist
 	for _, b := range backupServerNames() {
