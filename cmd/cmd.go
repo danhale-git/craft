@@ -115,14 +115,14 @@ When setting multiple properties, provide each one as a separate flag. Each flag
 	return runCmd
 }
 
-// NewCommandCmd returns the command command which executed a mc server command on the given server.
+// NewCommandCmd returns the command command which executes a mc server command on the given server.
 func NewCommandCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "command <server> <mc command>",
 		Aliases: []string{"cmd"},
-		Example: "craft command myserver give PlayerName stone 1",
 		Short:   "Run a command on a server",
 		Long:    `The first argument is the serer name. The following arguments will be executed in the server CLI.`,
+		Example: "craft command myserver give PlayerName stone 1",
 		// Takes 2 or more arguments
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.MinimumNArgs(2)(cmd, args)
@@ -140,6 +140,7 @@ func NewCommandCmd() *cobra.Command {
 	}
 }
 
+// NewBackupCmd returns the backup command which saves a local backup of the server and world.
 func NewBackupCmd() *cobra.Command {
 	backupCmd := &cobra.Command{
 		Use:   "backup <server names...>",
@@ -150,19 +151,49 @@ If two backups are taken in the same minute, the second will overwrite the first
 Backups are saved to a default directory under the user's home directory.
 The backed up world is usually a few seconds behind the world state at the time of backup.
 Use the trim and skip-trim-file-removal-check flags with linux cron or windows task scheduler to automate backups.`,
+		Example: `craft backup myserver
+craft backup myserver -l
+
+Linux cron (hourly):
+0 * * * * ~/craft_backups/backup.sh
+	
+	#!/usr/bin/env bash
+	~/go/bin/craft backup myserver myotherserver \ # path to craft executable and one or more servers
+	--skip-trim-file-removal-check --trim 3 \ # skip cmdline prompts and delete all except 3 newest files
+	--log ~/craft_backups/backup.log --log-level info # log to file with log level info
+`,
+		// Takes one or more arguments
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.MinimumNArgs(1)(cmd, args)
 		},
-		// save the world files to a backup archive
-		Run: craft.BackupCommand,
+		Run: func(cmd *cobra.Command, args []string) {
+			trim, err := cmd.Flags().GetInt("trim")
+			if err != nil {
+				logger.Panic(err)
+			}
+
+			list, err := cmd.Flags().GetBool("list")
+			if err != nil {
+				logger.Panic(err)
+			}
+
+			skip, err := cmd.Flags().GetBool("skip-trim-file-removal-check")
+			if err != nil {
+				logger.Panic(err)
+			}
+
+			craft.BackupCommand(trim, list, skip, args)
+		},
 	}
 
 	backupCmd.Flags().IntP("trim", "t", 0,
 		"Delete the oldest backup files, leaving the given count of newest files in place.")
-	backupCmd.Flags().Bool("skip-trim-file-removal-check", false,
-		"Don't prompt the user before removing files. Useful for automating backups.")
+
 	backupCmd.Flags().BoolP("list", "l", false,
 		"List backup files and take no other action.")
+
+	backupCmd.Flags().Bool("skip-trim-file-removal-check", false,
+		"Don't prompt the user before removing files. Useful for automating backups.")
 
 	return backupCmd
 }

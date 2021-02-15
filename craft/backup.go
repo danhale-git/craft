@@ -21,8 +21,6 @@ import (
 	"github.com/danhale-git/craft/internal/backup"
 
 	"github.com/danhale-git/craft/internal/docker"
-
-	"github.com/spf13/cobra"
 )
 
 const (
@@ -34,28 +32,23 @@ var serverFiles = []string{
 	server2.FileNames.ServerProperties, // server.properties
 }
 
-func BackupCommand(cmd *cobra.Command, args []string) {
+func BackupCommand(trim int, list, skip bool, servers []string) {
 	created := make([]string, 0)
 	deleted := make([]string, 0)
 
-	for _, arg := range args {
-		c := docker.NewContainerOrExit(arg)
-
-		l, err := cmd.Flags().GetBool("list")
-		if err != nil {
-			panic(err)
-		}
-
-		// List backups and exit
-		if l {
-			backups := listBackups(c.ContainerName)
+	for _, name := range servers {
+		// List backups and continue
+		if list {
+			backups := listBackups(name)
 
 			for i := len(backups) - 1; i >= 0; i-- {
 				fmt.Println(backups[i].Name())
 			}
 
-			return
+			continue
 		}
+
+		c := docker.NewContainerOrExit(name)
 
 		// Take a new backup
 		name, err := copyBackup(c)
@@ -64,16 +57,6 @@ func BackupCommand(cmd *cobra.Command, args []string) {
 		}
 
 		created = append(created, name)
-
-		trim, err := cmd.Flags().GetInt("trim")
-		if err != nil {
-			panic(err)
-		}
-
-		skip, err := cmd.Flags().GetBool("skip-trim-file-removal-check")
-		if err != nil {
-			panic(err)
-		}
 
 		// Delete old backups
 		if trim > 0 {
