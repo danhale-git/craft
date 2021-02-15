@@ -1,4 +1,4 @@
-package cmd
+package craft
 
 import (
 	"strings"
@@ -46,7 +46,7 @@ func StartCommand(cmd *cobra.Command, args []string) {
 			continue
 		}
 
-		if err = runServer(c); err != nil {
+		if err = RunServer(c); err != nil {
 			logger.Error.Printf("%s: starting server process: %s", name, err)
 
 			if err := c.Stop(); err != nil {

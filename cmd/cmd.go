@@ -5,9 +5,8 @@ import (
 	"io"
 	"log"
 	"os"
-	"text/tabwriter"
 
-	"github.com/danhale-git/craft/internal/backup"
+	"github.com/danhale-git/craft/craft"
 
 	"github.com/danhale-git/craft/internal/docker"
 	"github.com/danhale-git/craft/internal/logger"
@@ -67,23 +66,49 @@ func NewRootCmd() *cobra.Command {
 	return rootCmd
 }
 
+// NewRunCmd returns the run command, which creates a new craft server container and runs the server process.
 func NewRunCmd() *cobra.Command {
-	// runCmd represents the run command
 	runCmd := &cobra.Command{
 		Use:   "run <server name>",
 		Short: "Create a new server",
-		Long:  "Defaults to a new default world. .mcworld file and optional server.properties may be provided.",
-		// Require exactly one argument
+		Long: `Runs a new docker container and runs the server process within it.
+A .mcworld file and custom server.properties fields may be provided via command line flags.
+When setting multiple properties, provide each one as a separate flag. Each flag should define only property field.`,
+		Example: `craft run mynewserver --world C:\Users\MyUser\Downloads\exported_world.mcworld --prop difficulty=hard`,
+		// Takes exactly one argument
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.RangeArgs(1, 1)(cmd, args)
 		},
-		// Create a new docker container, copy files and run the mc server binary
-		Run: RunCommand,
+		Run: func(cmd *cobra.Command, args []string) {
+			port, err := cmd.Flags().GetInt("port")
+			if err != nil {
+				logger.Panic(err)
+			}
+
+			mcworld, err := cmd.Flags().GetString("world")
+			if err != nil {
+				logger.Panic(err)
+			}
+
+			props, err := cmd.Flags().GetStringSlice("prop")
+			if err != nil {
+				logger.Panic(err)
+			}
+
+			if err := craft.CreateServer(args[0], mcworld, port, props); err != nil {
+				logger.Error.Fatalf("Error creating container: %s", err)
+			}
+		},
 	}
 
-	runCmd.Flags().IntP("port", "p", 0, "External port players connect to.")
-	runCmd.Flags().String("world", "", "Path to a .mcworld file to be loaded.")
-	runCmd.Flags().StringSlice("prop", nil, "A server.properties field e.g. --prop gamemode=survival")
+	runCmd.Flags().Int("port", 0,
+		"External port players connect to.")
+
+	runCmd.Flags().String("world", "",
+		"Path to a .mcworld file to be loaded.")
+
+	runCmd.Flags().StringSlice("prop", nil,
+		"A server.properties field e.g. --prop gamemode=survival")
 
 	return runCmd
 }
@@ -99,7 +124,7 @@ The first argument is the serer name.
 Any number of following arguments may be provided as a mc server command.`,
 		// Accept at 2 or more arguments
 		Args: func(cmd *cobra.Command, args []string) error {
-			return cobra.RangeArgs(2, len(args))(cmd, args)
+			return cobra.RangeArgs(32, len(args))(cmd, args)
 		},
 		// Send the given command to the container
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -132,7 +157,7 @@ Use the trim and skip-trim-file-removal-check flags with linux cron or windows t
 			return cobra.MinimumNArgs(1)(cmd, args)
 		},
 		// save the world files to a backup archive
-		Run: BackupCommand,
+		Run: craft.BackupCommand,
 	}
 
 	backupCmd.Flags().IntP("trim", "t", 0,
@@ -158,7 +183,7 @@ If multiple arguments are provided, the --port flag is ignored and ports are ass
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.MinimumNArgs(1)(cmd, args)
 		},
-		Run: StartCommand,
+		Run: craft.StartCommand,
 	}
 
 	startCmd.Flags().IntP("port", "p", 0,
@@ -175,7 +200,7 @@ func NewStopCmd() *cobra.Command {
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.MinimumNArgs(1)(cmd, args)
 		},
-		Run: StopCommand,
+		Run: craft.StopCommand,
 	}
 
 	stopCmd.Flags().Bool("no-backup", false,
@@ -223,73 +248,7 @@ func NewListCmd() *cobra.Command {
 	listCmd := &cobra.Command{
 		Use:   "list <server>",
 		Short: "List servers",
-		Run: func(cmd *cobra.Command, args []string) {
-			w := tabwriter.NewWriter(os.Stdout, 3, 3, 3, ' ', tabwriter.TabIndent)
-
-			// List running servers
-			servers, err := docker.ActiveServerClients()
-			if err != nil {
-				log.Fatalf("Error getting server clients: %s", err)
-			}
-
-			for _, s := range servers {
-				c, err := docker.NewContainer(s.ContainerName)
-				if err != nil {
-					log.Fatalf("Error creating docker client for container '%s': %s", s.ContainerName, err)
-				}
-
-				port, err := c.GetPort()
-				if err != nil {
-					log.Fatalf("Error getting port for container '%s': '%s'", s.ContainerName, err)
-				}
-
-				if _, err := fmt.Fprintf(w, "%s\trunning - port %d\n", s.ContainerName, port); err != nil {
-					log.Fatalf("Error writing to table: %s", err)
-				}
-			}
-
-			all, err := cmd.Flags().GetBool("all")
-			if err != nil {
-				panic(err)
-			}
-
-			if !all {
-				if err = w.Flush(); err != nil {
-					log.Fatalf("Error writing output to console: %s", err)
-				}
-
-				return
-			}
-
-			for _, n := range backupServerNames() {
-				// If n is in list of active server names
-				if func() bool {
-					for _, s := range servers {
-						if s.ContainerName == n {
-							return true
-						}
-					}
-					return false
-				}() {
-					continue
-				}
-
-				f := latestBackupFileName(n)
-
-				t, err := backup.FileTime(f.Name())
-				if err != nil {
-					panic(err)
-				}
-
-				if _, err := fmt.Fprintf(w, "%s\tstopped - %s\n", n, t.Format(timeFormat)); err != nil {
-					log.Fatalf("Error writing to table: %s", err)
-				}
-			}
-
-			if err = w.Flush(); err != nil {
-				log.Fatalf("Error writing output to console: %s", err)
-			}
-		},
+		Run:   craft.ListCommand,
 	}
 
 	listCmd.Flags().BoolP("all", "a", false, "Show all servers. Defaults to only running servers.")
@@ -304,18 +263,7 @@ func NewConfigureCmd() *cobra.Command {
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.RangeArgs(1, 1)(cmd, args)
 		},
-		Run: func(cmd *cobra.Command, args []string) {
-			c := docker.NewContainerOrExit(args[0])
-
-			props, err := cmd.Flags().GetStringSlice("prop")
-			if err != nil {
-				panic(err)
-			}
-
-			if err := setServerProperties(props, c); err != nil {
-				logger.Error.Fatalf("setting server properties: %s", err)
-			}
-		},
+		Run: craft.ConfigureCommand,
 	}
 
 	configureCmd.Flags().StringSlice("prop", []string{}, "A server property name and value e.g. 'gamemode=creative'.")
