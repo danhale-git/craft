@@ -5,6 +5,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 
 	"github.com/danhale-git/craft/craft"
 
@@ -66,7 +67,7 @@ func NewRootCmd() *cobra.Command {
 	return rootCmd
 }
 
-// NewRunCmd returns the run command, which creates a new craft server container and runs the server process.
+// NewRunCmd returns the run command which creates a new craft server container and runs the server process.
 func NewRunCmd() *cobra.Command {
 	runCmd := &cobra.Command{
 		Use:   "run <server name>",
@@ -95,8 +96,9 @@ When setting multiple properties, provide each one as a separate flag. Each flag
 				logger.Panic(err)
 			}
 
-			if err := craft.CreateServer(args[0], mcworld, port, props); err != nil {
-				logger.Error.Fatalf("Error creating container: %s", err)
+			err = craft.CreateServer(args[0], mcworld, port, props)
+			if err != nil {
+				logger.Error.Fatalf("creating server: %s", err)
 			}
 		},
 	}
@@ -113,32 +115,27 @@ When setting multiple properties, provide each one as a separate flag. Each flag
 	return runCmd
 }
 
+// NewCommandCmd returns the command command which executed a mc server command on the given server.
 func NewCommandCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "command <server> <mc command>",
 		Aliases: []string{"cmd"},
 		Example: "craft command myserver give PlayerName stone 1",
 		Short:   "Run a command on a server",
-		Long: `
-The first argument is the serer name.
-Any number of following arguments may be provided as a mc server command.`,
-		// Accept at 2 or more arguments
+		Long:    `The first argument is the serer name. The following arguments will be executed in the server CLI.`,
+		// Takes 2 or more arguments
 		Args: func(cmd *cobra.Command, args []string) error {
-			return cobra.RangeArgs(32, len(args))(cmd, args)
+			return cobra.MinimumNArgs(2)(cmd, args)
 		},
-		// Send the given command to the container
-		RunE: func(cmd *cobra.Command, args []string) error {
-			containerName := args[0]
-			command := args[1:]
+		Run: func(cmd *cobra.Command, args []string) {
+			err := craft.RunCommand(
+				docker.NewContainerOrExit(args[0]),
+				args[1:],
+			)
 
-			d := docker.NewContainerOrExit(containerName)
-
-			err := d.Command(command)
 			if err != nil {
-				return err
+				logger.Error.Fatalf("running command '%s': %s", strings.Join(args[1:], " "), err)
 			}
-
-			return nil
 		},
 	}
 }

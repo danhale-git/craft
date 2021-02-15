@@ -76,3 +76,12 @@ func RunServer(c *docker.Container) error {
 
 	return fmt.Errorf("reached end of log reader without finding the 'Server started' message")
 }
+
+func RunCommand(c *docker.Container, commandArgs []string) error {
+	err := c.Command(commandArgs)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
