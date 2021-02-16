@@ -74,7 +74,8 @@ func NewRunCmd() *cobra.Command {
 		Short: "Create a new server",
 		Long: `Runs a new docker container and runs the server process within it.
 A .mcworld file and custom server.properties fields may be provided via command line flags.
-When setting multiple properties, provide each one as a separate flag. Each flag should define only property field.`,
+When setting multiple properties, provide each one as a separate flag. Each flag should define only property field.
+If no port flag is provided, the lowest available (unused by docker) port between 19132 and 19232 will be used.`,
 		Example: `craft run mynewserver --world C:\Users\MyUser\Downloads\exported_world.mcworld --prop difficulty=hard`,
 		// Takes exactly one argument
 		Args: func(cmd *cobra.Command, args []string) error {
@@ -104,7 +105,7 @@ When setting multiple properties, provide each one as a separate flag. Each flag
 	}
 
 	runCmd.Flags().Int("port", 0,
-		"External port players connect to.")
+		"External port for players connect to. Default (0 value) will auto-assign a port.")
 
 	runCmd.Flags().String("world", "",
 		"Path to a .mcworld file to be loaded.")
@@ -198,6 +199,7 @@ Linux cron (hourly):
 	return backupCmd
 }
 
+// NewStartCmd returns the start command, which starts a server from the most recent backup.
 func NewStartCmd() *cobra.Command {
 	// startCmd represents the start command
 	startCmd := &cobra.Command{
@@ -205,17 +207,42 @@ func NewStartCmd() *cobra.Command {
 		Short: "Start a stopped server.",
 		Long: `Start creates a new server from the latest backup for the given server name(s).
 
-If no port is specified then an unused one will be chosen. Whether the port is unused is determined by examining all
-other craft containers. The lowest available port between 19132 and 19232 will be assigned.
+If no port flag is provided, the lowest available (unused by docker) port between 19132 and 19232 will be used.
 If multiple arguments are provided, the --port flag is ignored and ports are assigned automatically.`,
+		// Takes one or more arguments
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.MinimumNArgs(1)(cmd, args)
 		},
-		Run: craft.StartCommand,
+		Run: func(cmd *cobra.Command, args []string) {
+			started := make([]string, 0)
+
+			var port int
+			var err error
+
+			if len(args) > 1 {
+				port = 0
+			} else {
+				port, err = cmd.Flags().GetInt("port")
+				if err != nil {
+					panic(err)
+				}
+			}
+
+			for _, name := range args {
+				_, err := craft.RunLatestBackup(name, port)
+				if err != nil {
+					logger.Error.Fatal(err)
+				}
+
+				started = append(started, name)
+			}
+
+			logger.Info.Println("started:", strings.Join(started, " "))
+		},
 	}
 
 	startCmd.Flags().IntP("port", "p", 0,
-		"External port for players connect to. Default (0 value) is to auto-assign a port.")
+		"External port for players connect to. Default (0 value) will auto-assign a port.")
 
 	return startCmd
 }
@@ -225,6 +252,7 @@ func NewStopCmd() *cobra.Command {
 	stopCmd := &cobra.Command{
 		Use:   "stop <servers...>",
 		Short: "Back up and stop a running server.",
+		Long:  `Back up the server then stop it. `,
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.MinimumNArgs(1)(cmd, args)
 		},

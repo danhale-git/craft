@@ -52,6 +52,35 @@ func CreateServer(name, mcworld string, port int, props []string) error {
 	return nil
 }
 
+// RunLatestBackup sorts all available backup files per date and starts a server from the latest backup.
+func RunLatestBackup(name string, port int) (*docker.Container, error) {
+	c, err := docker.RunContainer(port, name)
+	if err != nil {
+		return nil, fmt.Errorf("%s: running server: %s", name, err)
+	}
+
+	f := latestBackupFileName(name)
+
+	err = restoreBackup(c, f.Name())
+	if err != nil {
+		if err := c.Stop(); err != nil {
+			panic(err)
+		}
+
+		return nil, fmt.Errorf("%s: loading backup file to server: %s", name, err)
+	}
+
+	if err = RunServer(c); err != nil {
+		if err := c.Stop(); err != nil {
+			panic(err)
+		}
+
+		return nil, fmt.Errorf("%s: starting server process: %s", name, err)
+	}
+
+	return c, nil
+}
+
 // runServer executes the server binary and waits for the server to be ready before returning.
 func RunServer(c *docker.Container) error {
 	// Run the bedrock_server process
