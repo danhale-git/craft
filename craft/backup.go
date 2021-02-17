@@ -51,7 +51,7 @@ func BackupCommand(trim int, list, skip bool, servers []string) {
 		c := docker.NewContainerOrExit(name)
 
 		// Take a new backup
-		name, err := copyBackup(c)
+		name, err := CopyBackup(c)
 		if err != nil {
 			log.Fatalf("Error taking backup: %s", err)
 		}
@@ -163,7 +163,7 @@ func latestBackupFileName(serverName string) os.FileInfo {
 	return backup.SortFilesByDate(infos)[len(infos)-1]
 }
 
-func copyBackup(d *docker.Container) (string, error) {
+func CopyBackup(d *docker.Container) (string, error) {
 	backupPath := filepath.Join(backupDirectory(), d.ContainerName)
 	fileName := fmt.Sprintf("%s_%s.zip", d.ContainerName, time.Now().Format(backup.FileNameTimeLayout))
 	backupFilePath := path.Join(backupPath, fileName)

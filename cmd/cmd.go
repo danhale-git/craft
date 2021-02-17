@@ -129,11 +129,7 @@ func NewCommandCmd() *cobra.Command {
 			return cobra.MinimumNArgs(2)(cmd, args)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			err := craft.RunCommand(
-				docker.NewContainerOrExit(args[0]),
-				args[1:],
-			)
-
+			err := docker.NewContainerOrExit(args[0]).Command(args[1:])
 			if err != nil {
 				logger.Error.Fatalf("running command '%s': %s", strings.Join(args[1:], " "), err)
 			}
@@ -199,7 +195,7 @@ Linux cron (hourly):
 	return backupCmd
 }
 
-// NewStartCmd returns the start command, which starts a server from the most recent backup.
+// NewStartCmd returns the start command which starts a server from the most recent backup.
 func NewStartCmd() *cobra.Command {
 	// startCmd represents the start command
 	startCmd := &cobra.Command{
@@ -247,20 +243,37 @@ If multiple arguments are provided, the --port flag is ignored and ports are ass
 	return startCmd
 }
 
+// NewStopCmd returns the stop command which takes a backup and stops the server.
 func NewStopCmd() *cobra.Command {
 	// stopCmd represents the stop command
 	stopCmd := &cobra.Command{
 		Use:   "stop <servers...>",
 		Short: "Back up and stop a running server.",
-		Long:  `Back up the server then stop it. `,
+		Long:  `Back up the server then stop it. If the backup process fails, the server will not be stopped. `,
+		// Takes at least one argument
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.MinimumNArgs(1)(cmd, args)
 		},
-		Run: craft.StopCommand,
-	}
+		Run: func(cmd *cobra.Command, args []string) {
+			stopped := make([]string, 0)
 
-	stopCmd.Flags().Bool("no-backup", false,
-		"Stop the server without backing up first.")
+			for _, name := range args {
+				// TODO: Should skip here if ContainerNotFoundError, not exit
+				c := docker.NewContainerOrExit(name)
+				if _, err := craft.CopyBackup(c); err != nil {
+					logger.Error.Printf("%s: error while taking backup: %s", c.ContainerName, err)
+					continue
+				}
+
+				if err := craft.Stop(c); err != nil {
+					logger.Error.Printf("%s: stopping server: %s", c.ContainerName, err)
+				}
+				stopped = append(stopped, c.ContainerName)
+			}
+
+			logger.Info.Println("stopped:", strings.Join(stopped, " "))
+		},
+	}
 
 	return stopCmd
 }
