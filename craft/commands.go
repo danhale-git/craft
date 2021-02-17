@@ -8,7 +8,6 @@ import (
 
 	"github.com/danhale-git/craft/internal/backup"
 	"github.com/danhale-git/craft/internal/docker"
-	"github.com/danhale-git/craft/internal/logger"
 	"github.com/spf13/cobra"
 )
 
@@ -77,18 +76,5 @@ func ListCommand(cmd *cobra.Command, args []string) {
 
 	if err = w.Flush(); err != nil {
 		log.Fatalf("Error writing output to console: %s", err)
-	}
-}
-
-func ConfigureCommand(cmd *cobra.Command, args []string) {
-	c := docker.NewContainerOrExit(args[0])
-
-	props, err := cmd.Flags().GetStringSlice("prop")
-	if err != nil {
-		panic(err)
-	}
-
-	if err := setServerProperties(props, c); err != nil {
-		logger.Error.Fatalf("setting server properties: %s", err)
 	}
 }

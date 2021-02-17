@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/danhale-git/craft/internal/configure"
+	"github.com/danhale-git/craft/internal/server"
+
 	"github.com/danhale-git/craft/internal/docker"
 )
 
@@ -40,7 +43,7 @@ func CreateServer(name, mcworld string, port int, props []string) error {
 	}
 
 	// Set the properties
-	if err := setServerProperties(props, c); err != nil {
+	if err := SetServerProperties(props, c); err != nil {
 		return fmt.Errorf("setting server properties: %s", err)
 	}
 
@@ -113,6 +116,39 @@ func Stop(c *docker.Container) error {
 
 	if err := c.Stop(); err != nil {
 		return fmt.Errorf("%s: stopping docker container: %s", c.ContainerName, err)
+	}
+
+	return nil
+}
+
+func SetServerProperties(propFlags []string, c *docker.Container) error {
+	if len(propFlags) > 0 {
+		k := make([]string, len(propFlags))
+		v := make([]string, len(propFlags))
+
+		for i, p := range propFlags {
+			s := strings.Split(p, "=")
+			if !strings.ContainsRune(p, '=') || len(s[0]) == 0 || len(s[1]) == 0 {
+				return fmt.Errorf("invalid property '%s' should be 'key=value'", p)
+			}
+
+			k[i] = s[0]
+			v[i] = s[1]
+		}
+
+		b, err := c.CopyFileFrom(server.FilePaths.ServerProperties)
+		if err != nil {
+			return err
+		}
+
+		updated, err := configure.SetProperties(k, v, b)
+		if err != nil {
+			return err
+		}
+
+		if err = c.CopyFileTo(server.FilePaths.ServerProperties, updated); err != nil {
+			return err
+		}
 	}
 
 	return nil

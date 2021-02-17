@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"strings"
 
@@ -77,7 +76,6 @@ A .mcworld file and custom server.properties fields may be provided via command 
 When setting multiple properties, provide each one as a separate flag. Each flag should define only property field.
 If no port flag is provided, the lowest available (unused by docker) port between 19132 and 19232 will be used.`,
 		Example: `craft run mynewserver --world C:\Users\MyUser\Downloads\exported_world.mcworld --prop difficulty=hard`,
-		// Takes exactly one argument
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.RangeArgs(1, 1)(cmd, args)
 		},
@@ -124,7 +122,6 @@ func NewCommandCmd() *cobra.Command {
 		Short:   "Run a command on a server",
 		Long:    `The first argument is the serer name. The following arguments will be executed in the server CLI.`,
 		Example: "craft command myserver give PlayerName stone 1",
-		// Takes 2 or more arguments
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.MinimumNArgs(2)(cmd, args)
 		},
@@ -159,7 +156,6 @@ Linux cron (hourly):
 	--skip-trim-file-removal-check --trim 3 \ # skip cmdline prompts and delete all except 3 newest files
 	--log ~/craft_backups/backup.log --log-level info # log to file with log level info
 `,
-		// Takes one or more arguments
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.MinimumNArgs(1)(cmd, args)
 		},
@@ -205,7 +201,6 @@ func NewStartCmd() *cobra.Command {
 
 If no port flag is provided, the lowest available (unused by docker) port between 19132 and 19232 will be used.
 If multiple arguments are provided, the --port flag is ignored and ports are assigned automatically.`,
-		// Takes one or more arguments
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.MinimumNArgs(1)(cmd, args)
 		},
@@ -250,7 +245,6 @@ func NewStopCmd() *cobra.Command {
 		Use:   "stop <servers...>",
 		Short: "Back up and stop a running server.",
 		Long:  `Back up the server then stop it. If the backup process fails, the server will not be stopped. `,
-		// Takes at least one argument
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.MinimumNArgs(1)(cmd, args)
 		},
@@ -278,15 +272,14 @@ func NewStopCmd() *cobra.Command {
 	return stopCmd
 }
 
+// NewLogsCmd returns the logs command which tails the server cli output.
 func NewLogsCmd() *cobra.Command {
 	logsCmd := &cobra.Command{
 		Use:   "logs <server>",
 		Short: "Output server logs",
-		// Accept only one argument
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.ExactArgs(1)(cmd, args)
 		},
-		// Read logs from a container and copy them to stdout
 		Run: func(cmd *cobra.Command, args []string) {
 			c := docker.NewContainerOrExit(args[0])
 
@@ -297,11 +290,11 @@ func NewLogsCmd() *cobra.Command {
 
 			logs, err := c.LogReader(tail)
 			if err != nil {
-				log.Fatalf("Error reading logs from server: %s", err)
+				logger.Error.Fatalf("reading logs from server: %s", err)
 			}
 
 			if _, err := io.Copy(os.Stdout, logs); err != nil {
-				log.Fatalf("Error copying server output to stdout: %s", err)
+				logger.Error.Fatalf("copying server output to stdout: %s", err)
 			}
 		},
 	}
@@ -312,34 +305,50 @@ func NewLogsCmd() *cobra.Command {
 	return logsCmd
 }
 
+// NewListCmd returns the list command which lists running and backed up servers.
 func NewListCmd() *cobra.Command {
-	// listCmd represents the list command
 	listCmd := &cobra.Command{
 		Use:   "list <server>",
 		Short: "List servers",
+		Args:  cobra.NoArgs,
 		Run:   craft.ListCommand,
 	}
 
-	listCmd.Flags().BoolP("all", "a", false, "Show all servers. Defaults to only running servers.")
+	listCmd.Flags().BoolP("all", "a", false,
+		"Show all servers. The Default is to show only running servers.")
 
 	return listCmd
 }
 
+// NewConfigureCmd returns the configure command which operates on server files.
 func NewConfigureCmd() *cobra.Command {
 	configureCmd := &cobra.Command{
-		Use:   "configure",
-		Short: "Configure server properties, whitelist and mods.",
+		Use:   "configure <server>",
+		Short: "Configure server properties.",
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.RangeArgs(1, 1)(cmd, args)
 		},
-		Run: craft.ConfigureCommand,
+		Run: func(cmd *cobra.Command, args []string) {
+			c := docker.NewContainerOrExit(args[0])
+
+			props, err := cmd.Flags().GetStringSlice("prop")
+			if err != nil {
+				logger.Panic(err)
+			}
+
+			if err := craft.SetServerProperties(props, c); err != nil {
+				logger.Error.Fatalf("setting server properties: %s", err)
+			}
+		},
 	}
 
-	configureCmd.Flags().StringSlice("prop", []string{}, "A server property name and value e.g. 'gamemode=creative'.")
+	configureCmd.Flags().StringSlice("prop", []string{},
+		"A server property name and value e.g. 'gamemode=creative'.")
 
 	return configureCmd
 }
 
+// NewVersionCmd returns the version command which prints the current craft version
 func NewVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
