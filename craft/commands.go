@@ -2,9 +2,12 @@ package craft
 
 import (
 	"fmt"
+	"io/ioutil"
 	"log"
 	"os"
 	"text/tabwriter"
+
+	"github.com/danhale-git/craft/internal/logger"
 
 	"github.com/danhale-git/craft/internal/backup"
 	"github.com/danhale-git/craft/internal/docker"
@@ -69,7 +72,7 @@ func ListCommand(cmd *cobra.Command, args []string) {
 			panic(err)
 		}
 
-		if _, err := fmt.Fprintf(w, "%s\tstopped - %s\n", n, t.Format(timeFormat)); err != nil {
+		if _, err := fmt.Fprintf(w, "%s\tstopped - %s\n", n, t.Format("02 Jan 2006 3:04PM")); err != nil {
 			log.Fatalf("Error writing to table: %s", err)
 		}
 	}
@@ -77,4 +80,26 @@ func ListCommand(cmd *cobra.Command, args []string) {
 	if err = w.Flush(); err != nil {
 		log.Fatalf("Error writing output to console: %s", err)
 	}
+}
+
+// backupServerNames returns a slice with the names of all backed up servers.
+func backupServerNames() []string {
+	backupDir := backupDirectory()
+	infos, err := ioutil.ReadDir(backupDir)
+
+	if err != nil {
+		logger.Panicf("reading directory '%s': %s", backupDir, err)
+	}
+
+	names := make([]string, 0)
+
+	for _, f := range infos {
+		if !f.IsDir() {
+			continue
+		}
+
+		names = append(names, f.Name())
+	}
+
+	return names
 }

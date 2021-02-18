@@ -134,8 +134,8 @@ func Copy(out, command io.Writer, logs *bufio.Reader, copyFunc func(string) (*ta
 		if strings.HasPrefix(saveQueryResponse, "Data saved. Files are now ready to be copied.") {
 			// Write zip data to out file
 			zw := zip.NewWriter(out)
-
 			worldFilesString := readLine(logs)
+
 			// Files needed by mc server
 			worldFiles := strings.Split(worldFilesString, ", ")
 			for i, f := range worldFiles {

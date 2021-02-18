@@ -32,53 +32,13 @@ var serverFiles = []string{
 	server2.FileNames.ServerProperties, // server.properties
 }
 
-func BackupCommand(trim int, list, skip bool, servers []string) {
-	created := make([]string, 0)
-	deleted := make([]string, 0)
-
-	for _, name := range servers {
-		// List backups and continue
-		if list {
-			backups := listBackups(name)
-
-			for i := len(backups) - 1; i >= 0; i-- {
-				fmt.Println(backups[i].Name())
-			}
-
-			continue
-		}
-
-		c := docker.NewContainerOrExit(name)
-
-		// Take a new backup
-		name, err := CopyBackup(c)
-		if err != nil {
-			log.Fatalf("Error taking backup: %s", err)
-		}
-
-		created = append(created, name)
-
-		// Delete old backups
-		if trim > 0 {
-			deleted = append(deleted, trimBackups(c.ContainerName, trim, skip)...)
-		}
-	}
-
-	if len(created) > 0 {
-		logger.Info.Println("created:", strings.Join(created, " "))
-	}
-
-	if len(deleted) > 0 {
-		logger.Info.Println("deleted:", strings.Join(deleted, " "))
-	}
-}
-
-func trimBackups(name string, keep int, skip bool) []string {
+func TrimBackups(name string, keep int, skip bool) ([]string, error) {
 	deleted := make([]string, 0)
 
 	backups := listBackups(name)
 	if keep >= len(backups) {
-		return nil
+		// No backups need to be deleted
+		return nil, nil
 	}
 
 	remove := backups[:len(backups)-keep]
@@ -98,20 +58,20 @@ func trimBackups(name string, keep int, skip bool) []string {
 
 		if strings.TrimSpace(text) != "y" {
 			fmt.Println("cancelled")
-			return nil
+			return nil, nil
 		}
 	}
 
 	for _, f := range remove {
 		if err := os.Remove(filepath.Join(d, f.Name())); err != nil {
-			fmt.Println()
-			log.Fatalf("Error removing file: %s", err)
+			logger.Error.Printf("removing file: %s", err)
+			continue
 		}
 
 		deleted = append(deleted, f.Name())
 	}
 
-	return deleted
+	return deleted, nil
 }
 
 func listBackups(server string) []os.FileInfo {
