@@ -1,9 +1,11 @@
 package craft
 
 import (
+	"archive/tar"
 	"archive/zip"
 	"bufio"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"os"
@@ -14,7 +16,7 @@ import (
 
 	"github.com/danhale-git/craft/internal/logger"
 
-	server2 "github.com/danhale-git/craft/internal/server"
+	"github.com/danhale-git/craft/internal/server"
 
 	"github.com/mitchellh/go-homedir"
 
@@ -27,9 +29,13 @@ const (
 	backupDirName = "craft_backups" // Name of the local directory where backups are stored
 )
 
-// serverFiles is a collection of files needed by craft to return the server to its previous state.
-var serverFiles = []string{
-	server2.FileNames.ServerProperties, // server.properties
+// serverFiles returns the paths to all files in the server directory which are not part of the world backup. World
+// files are retrieved as part of the server's built in backup function. Other files required to persist the server
+// may also be included here.
+func serverFiles() []string {
+	return []string{
+		server.LocalPaths.ServerProperties, // server.properties
+	}
 }
 
 func TrimBackups(name string, keep int, skip bool) ([]string, error) {
@@ -123,9 +129,9 @@ func latestBackupFileName(serverName string) os.FileInfo {
 	return backup.SortFilesByDate(infos)[len(infos)-1]
 }
 
-func CopyBackup(d *docker.Container) (string, error) {
-	backupPath := filepath.Join(backupDirectory(), d.ContainerName)
-	fileName := fmt.Sprintf("%s_%s.zip", d.ContainerName, time.Now().Format(backup.FileNameTimeLayout))
+func CopyBackup(c *docker.Container) (string, error) {
+	backupPath := filepath.Join(backupDirectory(), c.ContainerName)
+	fileName := fmt.Sprintf("%s_%s.zip", c.ContainerName, time.Now().Format(backup.FileNameTimeLayout))
 	backupFilePath := path.Join(backupPath, fileName)
 
 	// Create the directory if it doesn't exist
@@ -143,19 +149,26 @@ func CopyBackup(d *docker.Container) (string, error) {
 	}
 
 	// Write to server CLI
-	c, err := d.CommandWriter()
+	cmd, err := c.CommandWriter()
 	if err != nil {
 		return "", err
 	}
 
 	// Read from server CLI
-	l, err := d.LogReader(0)
+	logs, err := c.LogReader(0)
 	if err != nil {
 		return "", err
 	}
 
+	paths, err := backup.SaveHoldQuery(cmd, logs)
+	if err != nil {
+		return "", err
+	}
+
+	paths = append(paths, serverFiles()...)
+
 	// Copy server files and write as zip data
-	if err = backup.Copy(f, c, l, d.CopyFrom, serverFiles); err != nil {
+	if err = copyFiles(c, f, paths); err != nil {
 		if err := f.Close(); err != nil {
 			logger.Error.Printf("failed to close backup file after error")
 		}
@@ -168,7 +181,34 @@ func CopyBackup(d *docker.Container) (string, error) {
 		return "", err
 	}
 
+	if err := backup.SaveResume(cmd, logs); err != nil {
+		logger.Error.Printf("error when running `save resume` (server may be in a bad state)")
+	}
+
 	return fileName, nil
+}
+
+func copyFiles(c *docker.Container, f io.Writer, paths []string) error {
+	// Write zip data to out file
+	zw := zip.NewWriter(f)
+
+	for _, p := range paths {
+		tr, err := c.CopyFrom(filepath.Join(server.Directory, p))
+		if err != nil {
+			return err
+		}
+
+		err = addTarToZip(p, tr, zw)
+		if err != nil {
+			return fmt.Errorf("copying file from server to zip: %s", err)
+		}
+	}
+
+	if err := zw.Close(); err != nil {
+		return fmt.Errorf("closing zip writer: %s", err)
+	}
+
+	return nil
 }
 
 // RestoreLatestBackup finds the latest backup and restores it to the server.
@@ -187,6 +227,40 @@ func restoreBackup(d *docker.Container, backupName string) error {
 
 	if err = zr.Close(); err != nil {
 		return fmt.Errorf("closing zip: %s", err)
+	}
+
+	return nil
+}
+
+func addTarToZip(path string, tr *tar.Reader, zw *zip.Writer) error {
+	for {
+		// Next file or end of archive
+		_, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// Read from tar archive
+		b, err := ioutil.ReadAll(tr)
+		if err != nil {
+			return err
+		}
+
+		// Create file in zip archive
+		f, err := zw.Create(path)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		// Write file to zip archive
+		_, err = f.Write(b)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	return nil

@@ -26,7 +26,7 @@ const (
 // FileTime returns the time.Time the backup was taken, given the file name.
 func FileTime(name string) (time.Time, error) {
 	split := strings.SplitN(name, "_", 2)
-	if len(split) < 2 {
+	if len(split) < 2 { //nolint:gomnd
 		return time.Time{}, fmt.Errorf("invalid file name: '%s'", name)
 	}
 
@@ -48,7 +48,7 @@ func FileTime(name string) (time.Time, error) {
 // files.
 func Restore(zr *zip.Reader, copyToFunc func(string, *bytes.Buffer) error) error {
 	for _, f := range zr.File {
-		if err := restoreFile(f, server.RootDirectory, copyToFunc); err != nil {
+		if err := restoreFile(f, server.Directory, copyToFunc); err != nil {
 			return fmt.Errorf("restoring %s: %s", f.Name, err)
 		}
 	}
@@ -59,7 +59,7 @@ func Restore(zr *zip.Reader, copyToFunc func(string, *bytes.Buffer) error) error
 // Restore reads from the given zip.ReadCloser, copying each of the files to the default world directory.
 func RestoreMCWorld(zr *zip.Reader, copyToFunc func(string, *bytes.Buffer) error) error {
 	for _, f := range zr.File {
-		if err := restoreFile(f, server.FilePaths.DefaultWorld, copyToFunc); err != nil {
+		if err := restoreFile(f, server.FullPaths.DefaultWorld, copyToFunc); err != nil {
 			return fmt.Errorf("restoring %s: %s", f.Name, err)
 		}
 	}
@@ -112,13 +112,13 @@ func restoreFile(f *zip.File, dest string, copyToFunc func(string, *bytes.Buffer
 // Copy runs the set of queries described in the bedrock server documentation for taking a backup without server
 // interruption. All files needed for server and world persistence are copied from the server to a local zip file. The
 // paths in the zip file extend to the server directory root.
-func Copy(out, command io.Writer, logs *bufio.Reader, copyFunc func(string) (*tar.Reader, error), serverFiles []string) error {
+func SaveHoldQuery(command io.Writer, logs *bufio.Reader) ([]string, error) {
 	// `save hold`
 	runCommand("save hold", command, logs)
 
 	saveHoldResponse := readLine(logs)
 	if strings.TrimSpace(saveHoldResponse) != "Saving..." {
-		return fmt.Errorf("unexpected response to `save hold`: '%s'", saveHoldResponse)
+		return nil, fmt.Errorf("unexpected response to `save hold`: '%s'", saveHoldResponse)
 	}
 
 	// Query until ready for backups
@@ -132,46 +132,33 @@ func Copy(out, command io.Writer, logs *bufio.Reader, copyFunc func(string) (*ta
 
 		// Ready for backup
 		if strings.HasPrefix(saveQueryResponse, "Data saved. Files are now ready to be copied.") {
-			// Write zip data to out file
-			zw := zip.NewWriter(out)
 			worldFilesString := readLine(logs)
 
-			// Files needed by mc server
 			worldFiles := strings.Split(worldFilesString, ", ")
 			for i, f := range worldFiles {
-				worldFiles[i] = filepath.Join(server.FileNames.Worlds, strings.Split(f, ":")[0])
+				worldFiles[i] = filepath.Join(
+					server.LocalPaths.Worlds,
+					strings.Split(f, ":")[0],
+				)
 			}
 
-			for _, p := range append(worldFiles, serverFiles...) {
-				tr, err := copyFunc(filepath.Join(server.RootDirectory, p))
-				if err != nil {
-					return err
-				}
-
-				err = addTarToZip(p, tr, zw)
-				if err != nil {
-					return fmt.Errorf("copying file from server to zip: %s", err)
-				}
-			}
-
-			err := zw.Close()
-			if err != nil {
-				return err
-			}
-
-			// `save resume`
-			runCommand("save resume", command, logs)
-
-			saveResumeResponse := readLine(logs)
-			if strings.TrimSpace(saveResumeResponse) != "Changes to the level are resumed." {
-				return fmt.Errorf("unexpected response to `save resume`: '%s'", saveResumeResponse)
-			}
-
-			return nil
+			return worldFiles, nil
 		}
 	}
 
-	return fmt.Errorf("exceeded %d retries of the 'save query' command", saveQueryRetries)
+	return nil, fmt.Errorf("exceeded %d retries of the 'save query' command", saveQueryRetries)
+}
+
+func SaveResume(command io.Writer, logs *bufio.Reader) error {
+	// `save resume`
+	runCommand("save resume", command, logs)
+
+	saveResumeResponse := readLine(logs)
+	if strings.TrimSpace(saveResumeResponse) != "Changes to the level are resumed." {
+		return fmt.Errorf("unexpected response to `save resume`: '%s'", saveResumeResponse)
+	}
+
+	return nil
 }
 
 func runCommand(cmd string, cli io.Writer, logs *bufio.Reader) {
@@ -193,38 +180,4 @@ func readLine(logs *bufio.Reader) string {
 	}
 
 	return res
-}
-
-func addTarToZip(path string, tr *tar.Reader, zw *zip.Writer) error {
-	for {
-		// Next file or end of archive
-		_, err := tr.Next()
-		if err == io.EOF {
-			break
-		}
-
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		// Read from tar archive
-		b, err := ioutil.ReadAll(tr)
-		if err != nil {
-			return err
-		}
-
-		// Create file in zip archive
-		f, err := zw.Create(path)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		// Write file to zip archive
-		_, err = f.Write(b)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	return nil
 }

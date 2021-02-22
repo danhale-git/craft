@@ -136,7 +136,7 @@ func SetServerProperties(propFlags []string, c *docker.Container) error {
 			v[i] = s[1]
 		}
 
-		b, err := c.CopyFileFrom(server.FilePaths.ServerProperties)
+		b, err := c.CopyFileFrom(server.FullPaths.ServerProperties)
 		if err != nil {
 			return err
 		}
@@ -146,7 +146,7 @@ func SetServerProperties(propFlags []string, c *docker.Container) error {
 			return err
 		}
 
-		if err = c.CopyFileTo(server.FilePaths.ServerProperties, updated); err != nil {
+		if err = c.CopyFileTo(server.FullPaths.ServerProperties, updated); err != nil {
 			return err
 		}
 	}
