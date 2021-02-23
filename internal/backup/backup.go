@@ -56,7 +56,7 @@ func Restore(zr *zip.Reader, copyToFunc func(string, *bytes.Buffer) error) error
 	return nil
 }
 
-// Restore reads from the given zip.ReadCloser, copying each of the files to the default world directory.
+// Restore reads from the given zip.Reader, copying each of the files to the default world directory.
 func RestoreMCWorld(zr *zip.Reader, copyToFunc func(string, *bytes.Buffer) error) error {
 	for _, f := range zr.File {
 		if err := restoreFile(f, server.FullPaths.DefaultWorld, copyToFunc); err != nil {

@@ -95,7 +95,12 @@ If no port flag is provided, the lowest available (unused by docker) port betwee
 				logger.Panic(err)
 			}
 
-			err = craft.CreateServer(args[0], mcworld, port, props)
+			var mcwFile craft.ZipOpener
+			if mcworld != "" {
+				mcwFile = craft.MCWorld{Path: mcworld}
+			}
+
+			err = craft.CreateServer(args[0], port, props, mcwFile)
 			if err != nil {
 				logger.Error.Fatalf("creating server: %s", err)
 			}

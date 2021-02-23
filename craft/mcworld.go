@@ -3,42 +3,40 @@ package craft
 import (
 	"archive/zip"
 	"fmt"
-
-	"github.com/danhale-git/craft/internal/backup"
-	"github.com/danhale-git/craft/internal/docker"
-	"github.com/danhale-git/craft/internal/logger"
 )
 
-func LoadMCWorldFile(mcworld string, c *docker.Container) error {
-	if err := checkWorldFiles(mcworld); err != nil {
-		return fmt.Errorf("invalid mcworld file: %s", err)
+type File struct {
+	Name string
+	Body []byte
+}
+
+type ZipOpener interface {
+	Open() (*zip.ReadCloser, error)
+}
+
+type MCWorld struct {
+	Path string // The full path to a valid .mcworld zip file
+}
+
+func (w MCWorld) Open() (*zip.ReadCloser, error) {
+	if err := w.check(); err != nil {
+		return nil, fmt.Errorf("invalid .mcworld file: %s", err)
 	}
 
 	// Open backup zip
-	zr, err := zip.OpenReader(mcworld)
-	if err != nil {
-		logger.Panic(err)
-	}
+	zr, _ := zip.OpenReader(w.Path)
 
-	if err = backup.RestoreMCWorld(&zr.Reader, c.CopyTo); err != nil {
-		return fmt.Errorf("restoring backup: %s", err)
-	}
-
-	if err = zr.Close(); err != nil {
-		logger.Panicf("closing zip: %s", err)
-	}
-
-	return nil
+	return zr, nil
 }
 
-func checkWorldFiles(mcworld string) error {
+func (w MCWorld) check() error {
 	expected := map[string]bool{
 		"db/CURRENT":    false,
 		"level.dat":     false,
 		"levelname.txt": false,
 	}
 
-	zr, err := zip.OpenReader(mcworld)
+	zr, err := zip.OpenReader(w.Path)
 	if err != nil {
 		return fmt.Errorf("failed to open zip: %s", err)
 	}

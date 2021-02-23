@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/danhale-git/craft/internal/backup"
+	"github.com/danhale-git/craft/internal/logger"
+
 	"github.com/danhale-git/craft/internal/configure"
 	"github.com/danhale-git/craft/internal/server"
 
@@ -17,7 +20,7 @@ const (
 
 // CreateServer spawns a new craft server. Only the name is required. Full path to a .mcworld file, port and a slice of
 // "property=newvalue" strings may also be provided.
-func CreateServer(name, mcworld string, port int, props []string) error {
+func CreateServer(name string, port int, props []string, mcworld ZipOpener) error {
 	// Check the server doesn't already exist
 	for _, b := range backupServerNames() {
 		if name == b {
@@ -32,13 +35,22 @@ func CreateServer(name, mcworld string, port int, props []string) error {
 	}
 
 	// Copy world files to the server
-	if mcworld != "" {
-		if err := LoadMCWorldFile(mcworld, c); err != nil {
+	if mcworld != nil {
+		zr, err := mcworld.Open()
+		if err != nil {
 			if err := c.Stop(); err != nil {
-				panic(err)
+				logger.Panic(err)
 			}
 
-			return fmt.Errorf("loading world file: %s", err)
+			return fmt.Errorf("inavlid world file: %s", err)
+		}
+
+		if err = backup.RestoreMCWorld(&zr.Reader, c.CopyTo); err != nil {
+			return fmt.Errorf("restoring backup: %s", err)
+		}
+
+		if err = zr.Close(); err != nil {
+			logger.Panic(err)
 		}
 	}
 
