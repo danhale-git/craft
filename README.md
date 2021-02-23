@@ -1,12 +1,13 @@
+[![Go Report Card](https://goreportcard.com/badge/github.com/danhale-git/craft)]()
 [![coverage](https://img.shields.io/badge/coverage-43.1%25-orange)]()
 [![coverage](https://img.shields.io/badge/build-passing-brightgreen)]()
 
 # Craft
 Craft is a simple tool for running and managing Bedrock servers.
 
-Craft is a Docker API wrapper which runs a specific (Bedrock server) container and wraps useful Docker functions.
+It's a docker API wrapper which runs a specific container and provides useful functions such as backing up the server.
 
-Windows and Linux are supported, MacOS is currently untested.
+Windows and Linux are supported.
 
 ### Examples
 
