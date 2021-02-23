@@ -1,6 +1,8 @@
-[![Go Report Card](https://goreportcard.com/badge/github.com/danhale-git/craft)]()
-[![coverage](https://img.shields.io/badge/coverage-43.1%25-orange)]()
-[![coverage](https://img.shields.io/badge/build-passing-brightgreen)]()
+![Go Report Card](https://goreportcard.com/badge/github.com/danhale-git/craft)
+![coverage](https://img.shields.io/badge/coverage-43.1%25-orange)
+![coverage](https://img.shields.io/badge/build-passing-brightgreen)
+![example workflow](https://github.com/danhale-git/craft/actions/workflows/go-test.yaml/badge.svg)
+![example workflow](https://github.com/danhale-git/craft/actions/workflows/test-coverage.yaml/badge.svg)
 
 # Craft
 Craft is a simple tool for running and managing Bedrock servers.
