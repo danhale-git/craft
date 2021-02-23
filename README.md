@@ -1,3 +1,6 @@
+[![coverage](https://img.shields.io/badge/coverage-43.1%25-orange)]()
+[![coverage](https://img.shields.io/badge/build-passing-brightgreen)]()
+
 # Craft
 Craft is a simple tool for running and managing Bedrock servers.
 
