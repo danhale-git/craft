@@ -259,7 +259,16 @@ func NewListCmd() *cobra.Command {
 		Use:   "list <server>",
 		Short: "List servers",
 		Args:  cobra.NoArgs,
-		Run:   craft.ListCommand,
+		Run: func(cmd *cobra.Command, args []string) {
+			all, err := cmd.Flags().GetBool("all")
+			if err != nil {
+				panic(err)
+			}
+
+			if err := craft.PrintServers(all); err != nil {
+				logger.Error.Fatal(err)
+			}
+		},
 	}
 
 	listCmd.Flags().BoolP("all", "a", false,

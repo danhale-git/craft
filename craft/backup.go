@@ -119,11 +119,15 @@ func backupDirectory() string {
 }
 
 func latestBackupFileName(serverName string) os.FileInfo {
-	backupDir := backupDirectory()
+	dir := path.Join(backupDirectory(), serverName)
 
-	infos, err := ioutil.ReadDir(path.Join(backupDir, serverName))
+	infos, err := ioutil.ReadDir(dir)
 	if err != nil {
 		panic(err)
+	}
+
+	if len(infos) == 0 {
+		logger.Error.Fatalf("directory %s is empty", dir)
 	}
 
 	return backup.SortFilesByDate(infos)[len(infos)-1]
@@ -264,4 +268,26 @@ func addTarToZip(path string, tr *tar.Reader, zw *zip.Writer) error {
 	}
 
 	return nil
+}
+
+// backupServerNames returns a slice with the names of all backed up servers.
+func backupServerNames() []string {
+	backupDir := backupDirectory()
+	infos, err := ioutil.ReadDir(backupDir)
+
+	if err != nil {
+		logger.Panicf("reading directory '%s': %s", backupDir, err)
+	}
+
+	names := make([]string, 0)
+
+	for _, f := range infos {
+		if !f.IsDir() {
+			continue
+		}
+
+		names = append(names, f.Name())
+	}
+
+	return names
 }

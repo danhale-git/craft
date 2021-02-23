@@ -3,7 +3,10 @@ package craft
 import (
 	"bufio"
 	"fmt"
+	"log"
+	"os"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/danhale-git/craft/internal/backup"
 	"github.com/danhale-git/craft/internal/logger"
@@ -161,6 +164,69 @@ func SetServerProperties(propFlags []string, c *docker.Container) error {
 		if err = c.CopyFileTo(server.FullPaths.ServerProperties, updated); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func PrintServers(all bool) error {
+	w := tabwriter.NewWriter(os.Stdout, 3, 3, 3, ' ', tabwriter.TabIndent)
+
+	servers, err := docker.ActiveServerClients()
+	if err != nil {
+		return fmt.Errorf("getting server clients: %s", err)
+	}
+
+	for _, s := range servers {
+		c, err := docker.NewContainer(s.ContainerName)
+		if err != nil {
+			return fmt.Errorf("creating docker client for container '%s': %s", s.ContainerName, err)
+		}
+
+		port, err := c.GetPort()
+		if err != nil {
+			return fmt.Errorf("getting port for container '%s': '%s'", s.ContainerName, err)
+		}
+
+		if _, err := fmt.Fprintf(w, "%s\trunning - port %d\n", s.ContainerName, port); err != nil {
+			return fmt.Errorf("writing to table: %s", err)
+		}
+	}
+
+	if !all {
+		if err = w.Flush(); err != nil {
+			return fmt.Errorf("writing output to console: %s", err)
+		}
+
+		return nil
+	}
+
+	for _, n := range backupServerNames() {
+		if func() bool { // if n is an active server
+			for _, s := range servers {
+				if s.ContainerName == n {
+					return true
+				}
+			}
+			return false
+		}() {
+			continue
+		}
+
+		f := latestBackupFileName(n)
+
+		t, err := backup.FileTime(f.Name())
+		if err != nil {
+			panic(err)
+		}
+
+		if _, err := fmt.Fprintf(w, "%s\tstopped - %s\n", n, t.Format("02 Jan 2006 3:04PM")); err != nil {
+			log.Fatalf("Error writing to table: %s", err)
+		}
+	}
+
+	if err = w.Flush(); err != nil {
+		log.Fatalf("Error writing output to console: %s", err)
 	}
 
 	return nil
