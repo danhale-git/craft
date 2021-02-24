@@ -1,5 +1,12 @@
-on: [pull_request]
 name: Run Tests
+on:
+  push:
+    tags:
+      - v*
+  pull_request:
+    branches:
+      - master
+      - main
 jobs:
   test:
     strategy:
