@@ -1,5 +1,5 @@
 on: [pull_request]
-name: Test
+name: Run Tests
 jobs:
   test:
     strategy:
