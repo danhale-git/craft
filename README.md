@@ -34,7 +34,7 @@ Windows and Linux (tested on Ubuntu 20) are supported.
     craft list -a
     
     # Run normal server commands
-    craft cmd myserver time set 0600
+    craft cmd myserver time set 0600 
 
 #### Linux automated backup
 This shell script (backup.sh) will save the servers `myserver1` and `myserver2` and log to `~/backup.log`.
