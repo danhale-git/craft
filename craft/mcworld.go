@@ -5,11 +5,6 @@ import (
 	"fmt"
 )
 
-type File struct {
-	Name string
-	Body []byte
-}
-
 type ZipOpener interface {
 	Open() (*zip.ReadCloser, error)
 }

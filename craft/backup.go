@@ -41,7 +41,7 @@ func serverFiles() []string {
 func TrimBackups(name string, keep int, skip bool) ([]string, error) {
 	deleted := make([]string, 0)
 
-	backups := listBackups(name)
+	backups := backupFiles(name)
 	if keep >= len(backups) {
 		// No backups need to be deleted
 		return nil, nil
@@ -80,7 +80,12 @@ func TrimBackups(name string, keep int, skip bool) ([]string, error) {
 	return deleted, nil
 }
 
-func listBackups(server string) []os.FileInfo {
+func latestBackupFile(name string) os.FileInfo {
+	backups := backupFiles(name)
+	return backups[len(backups)-1]
+}
+
+func backupFiles(server string) []os.FileInfo {
 	infos := make([]os.FileInfo, 0)
 	d := filepath.Join(backupDirectory(), server)
 
@@ -96,6 +101,28 @@ func listBackups(server string) []os.FileInfo {
 	}
 
 	return backup.SortFilesByDate(infos)
+}
+
+// backupServerNames returns a slice with the names of all backed up servers.
+func backupServerNames() []string {
+	backupDir := backupDirectory()
+	infos, err := ioutil.ReadDir(backupDir)
+
+	if err != nil {
+		logger.Panicf("reading directory '%s': %s", backupDir, err)
+	}
+
+	names := make([]string, 0)
+
+	for _, f := range infos {
+		if !f.IsDir() {
+			continue
+		}
+
+		names = append(names, f.Name())
+	}
+
+	return names
 }
 
 func backupDirectory() string {
@@ -116,21 +143,6 @@ func backupDirectory() string {
 	}
 
 	return backupDir
-}
-
-func latestBackupFileName(serverName string) os.FileInfo {
-	dir := path.Join(backupDirectory(), serverName)
-
-	infos, err := ioutil.ReadDir(dir)
-	if err != nil {
-		panic(err)
-	}
-
-	if len(infos) == 0 {
-		logger.Error.Fatalf("directory %s is empty", dir)
-	}
-
-	return backup.SortFilesByDate(infos)[len(infos)-1]
 }
 
 func CopyBackup(c *docker.Container) (string, error) {
@@ -268,26 +280,4 @@ func addTarToZip(path string, tr *tar.Reader, zw *zip.Writer) error {
 	}
 
 	return nil
-}
-
-// backupServerNames returns a slice with the names of all backed up servers.
-func backupServerNames() []string {
-	backupDir := backupDirectory()
-	infos, err := ioutil.ReadDir(backupDir)
-
-	if err != nil {
-		logger.Panicf("reading directory '%s': %s", backupDir, err)
-	}
-
-	names := make([]string, 0)
-
-	for _, f := range infos {
-		if !f.IsDir() {
-			continue
-		}
-
-		names = append(names, f.Name())
-	}
-
-	return names
 }

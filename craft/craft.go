@@ -77,7 +77,7 @@ func RunLatestBackup(name string, port int) (*docker.Container, error) {
 		return nil, fmt.Errorf("%s: running server: %s", name, err)
 	}
 
-	f := latestBackupFileName(name)
+	f := latestBackupFile(name)
 
 	err = restoreBackup(c, f.Name())
 	if err != nil {
@@ -124,6 +124,8 @@ func RunServer(c *docker.Container) error {
 	return fmt.Errorf("reached end of log reader without finding the 'Server started' message")
 }
 
+// Stop executes a stop command first in the server process cli then on the container itself, stopping the
+// server. The server must be saves separately to persist the world and settings.
 func Stop(c *docker.Container) error {
 	if err := c.Command([]string{"stop"}); err != nil {
 		return fmt.Errorf("%s: running 'stop' command in server cli to stop server process: %s", c.ContainerName, err)
@@ -136,6 +138,8 @@ func Stop(c *docker.Container) error {
 	return nil
 }
 
+// SetServerProperties takes a collection of key=value pairs and applies them to the server.properties configuration
+// file. If a key is missing, an error will be returned and no changes will be made.
 func SetServerProperties(propFlags []string, c *docker.Container) error {
 	if len(propFlags) > 0 {
 		k := make([]string, len(propFlags))
@@ -169,6 +173,8 @@ func SetServerProperties(propFlags []string, c *docker.Container) error {
 	return nil
 }
 
+// PrintServers prints a list of servers. If all is true then stopped servers will be printed. Running servers show the
+// port players should connect on and stopped servers show the date and time at which they were stopped.
 func PrintServers(all bool) error {
 	w := tabwriter.NewWriter(os.Stdout, 3, 3, 3, ' ', tabwriter.TabIndent)
 
@@ -213,7 +219,7 @@ func PrintServers(all bool) error {
 			continue
 		}
 
-		f := latestBackupFileName(n)
+		f := latestBackupFile(n)
 
 		t, err := backup.FileTime(f.Name())
 		if err != nil {
