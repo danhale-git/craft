@@ -202,7 +202,7 @@ Changes to the level are resumed.
 	}
 }
 
-func mockTar(path string) *tar.Reader {
+/*func mockTar(path string) *tar.Reader {
 	var buf bytes.Buffer
 
 	tw := tar.NewWriter(&buf)
@@ -233,4 +233,4 @@ func mockTar(path string) *tar.Reader {
 	}
 
 	return tar.NewReader(bytes.NewReader(buf.Bytes()))
-}
+}*/
