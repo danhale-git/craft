@@ -10,3 +10,4 @@ craft stop testserver
 craft start testserver
 craft backup testserver
 craft cmd testserver time set 0600
+craft stop testserver
