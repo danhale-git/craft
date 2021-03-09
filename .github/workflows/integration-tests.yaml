@@ -16,7 +16,5 @@ jobs:
         uses: actions/setup-go@v1
         with:
           go-version: '1.16'
-      - run: |
-        chmod +x ${GITHUB_WORKSPACE}/cmd/integration_tests.sh &&
-        ${GITHUB_WORKSPACE}/cmd/integration_tests.sh
+      - run: "chmod +x ${GITHUB_WORKSPACE}/cmd/integration_tests.sh && ${GITHUB_WORKSPACE}/cmd/integration_tests.sh"
 
