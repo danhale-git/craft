@@ -23,14 +23,14 @@ var FileNames = FileDetails{ //nolint:gochecknoglobals
 
 // LocalPaths are the paths to server files from the server directory (server.Directory).
 var LocalPaths = FileDetails{ //nolint:gochecknoglobals
-	ServerProperties: path.Join(FileNames.ServerProperties),               // File defining the server settings
-	Worlds:           path.Join(FileNames.Worlds),                         // Directory where worlds are stored
+	ServerProperties: FileNames.ServerProperties,                          // File defining the server settings
+	Worlds:           FileNames.Worlds,                                    // Directory where worlds are stored
 	DefaultWorld:     path.Join(FileNames.Worlds, FileNames.DefaultWorld), // Directory where the default world is stored
 }
 
 // FullPaths are the full paths to server files, from the root directory.
 var FullPaths = FileDetails{ //nolint:gochecknoglobals
-	ServerProperties: path.Join(Directory, FileNames.ServerProperties),               // File defining the server settings
-	Worlds:           path.Join(Directory, FileNames.Worlds),                         // Directory where worlds are stored
-	DefaultWorld:     path.Join(Directory, FileNames.Worlds, FileNames.DefaultWorld), // Directory where the default world is stored
+	ServerProperties: path.Join(Directory, LocalPaths.ServerProperties), // File defining the server settings
+	Worlds:           path.Join(Directory, LocalPaths.Worlds),           // Directory where worlds are stored
+	DefaultWorld:     path.Join(Directory, LocalPaths.DefaultWorld),     // Directory where the default world is stored
 }
