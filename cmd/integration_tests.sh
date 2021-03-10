@@ -10,9 +10,9 @@ craft run testserver
 
 craft list -a
 
-craft configure test --prop gamemode=creative
+craft configure testserver --prop gamemode=creative
 
-mode=$(docker exec test cat /bedrock/server.properties | grep gamemode)
+mode=$(docker exec testserver cat /bedrock/server.properties | grep gamemode)
 if [ "$mode" != "gamemode=creative" ]; then
   exit 1
 fi
