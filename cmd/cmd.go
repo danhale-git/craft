@@ -301,6 +301,7 @@ func NewConfigureCmd() *cobra.Command {
 
 	configureCmd.Flags().StringSlice("prop", []string{},
 		"A server property name and value e.g. 'gamemode=creative'.")
+	_ = configureCmd.MarkFlagRequired("prop")
 
 	return configureCmd
 }
