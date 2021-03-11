@@ -156,6 +156,7 @@ func backupDirectory() string {
 	return backupDir
 }
 
+// CopyBackup saves a backup to the default local directory.
 func CopyBackup(c *docker.Container) (string, error) {
 	backupPath := filepath.Join(backupDirectory(), c.ContainerName)
 	fileName := fmt.Sprintf("%s_%s.zip", c.ContainerName, time.Now().Format(backup.FileNameTimeLayout))
@@ -192,10 +193,15 @@ func CopyBackup(c *docker.Container) (string, error) {
 		return "", err
 	}
 
+	// Prepend path from server directory to world directory
+	for i, p := range paths {
+		paths[i] = filepath.Join(server.LocalPaths.Worlds, p)
+	}
+
 	paths = append(paths, serverFiles()...)
 
 	// Copy server files and write as zip data
-	if err = copyFiles(c, f, paths); err != nil {
+	if err = copyFiles(c, f, server.Directory, paths); err != nil {
 		if err := f.Close(); err != nil {
 			logger.Error.Printf("failed to close backup file after error")
 		}
@@ -215,12 +221,79 @@ func CopyBackup(c *docker.Container) (string, error) {
 	return fileName, nil
 }
 
-func copyFiles(c *docker.Container, f io.Writer, paths []string) error {
+// Exports the server's current world to the given destination directory.
+func ExportMCWorld(c *docker.Container, dest string) error {
+	dir, err := os.Stat(dest)
+	if err != nil {
+		return err
+	}
+
+	filePath := filepath.Join(dest, fmt.Sprintf("%s.mcworld", c.ContainerName))
+
+	if !dir.Mode().IsDir() {
+		return fmt.Errorf("'%s' is not a directory", dest)
+	}
+
+	// Create the file
+	f, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
+
+	// Write to server CLI
+	cmd, err := c.CommandWriter()
+	if err != nil {
+		return err
+	}
+
+	// Read from server CLI
+	logs, err := c.LogReader(0)
+	if err != nil {
+		return err
+	}
+
+	paths, err := backup.SaveHoldQuery(cmd, logs)
+	if err != nil {
+		return err
+	}
+
+	// Prepend path from server directory to world directory
+	for i, p := range paths {
+		paths[i] = filepath.Join(strings.Split(p, "/")[1:]...)
+	}
+
+	// Copy server files and write as zip data
+	if err = copyFiles(c, f, server.FullPaths.DefaultWorld, paths); err != nil {
+		if err := f.Close(); err != nil {
+			logger.Error.Printf("failed to close backup file after error")
+		}
+
+		// Clean up bad backup file
+		if err := os.Remove(dest); err != nil {
+			logger.Error.Printf("failed to remove backup file after error: %s", err)
+		}
+
+		return err
+	}
+
+	if err := backup.SaveResume(cmd, logs); err != nil {
+		logger.Error.Printf("error when running `save resume` (server may be in a bad state)")
+	}
+
+	mcWorld := MCWorld{Path: filePath}
+	if err := mcWorld.check(); err != nil {
+		return fmt.Errorf("invalid world file after exporting: %s", err)
+	}
+
+	return nil
+}
+
+func copyFiles(c *docker.Container, f io.Writer, containerPrefix string, paths []string) error {
 	// Write zip data to out file
 	zw := zip.NewWriter(f)
 
 	for _, p := range paths {
-		tr, err := c.CopyFrom(filepath.Join(server.Directory, p))
+		tr, err := c.CopyFrom(filepath.Join(containerPrefix, p))
 		if err != nil {
 			return err
 		}
@@ -238,7 +311,6 @@ func copyFiles(c *docker.Container, f io.Writer, paths []string) error {
 	return nil
 }
 
-// RestoreLatestBackup finds the latest backup and restores it to the server.
 func restoreBackup(d *docker.Container, backupName string) error {
 	backupPath := filepath.Join(backupDirectory(), d.ContainerName)
 

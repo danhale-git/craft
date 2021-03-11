@@ -136,10 +136,7 @@ func SaveHoldQuery(command io.Writer, logs *bufio.Reader) ([]string, error) {
 
 			worldFiles := strings.Split(worldFilesString, ", ")
 			for i, f := range worldFiles {
-				worldFiles[i] = filepath.Join(
-					server.LocalPaths.Worlds,
-					strings.Split(f, ":")[0],
-				)
+				worldFiles[i] = strings.Split(f, ":")[0]
 			}
 
 			return worldFiles, nil

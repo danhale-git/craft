@@ -35,6 +35,7 @@ func commands() []func() *cobra.Command {
 		NewLogsCmd,
 		NewListCmd,
 		NewConfigureCmd,
+		NewExportCommand,
 		NewVersionCmd,
 	}
 }
@@ -304,6 +305,38 @@ func NewConfigureCmd() *cobra.Command {
 	_ = configureCmd.MarkFlagRequired("prop")
 
 	return configureCmd
+}
+
+// NewExportCommand returns the version command which prints the current craft version
+func NewExportCommand() *cobra.Command {
+	command := &cobra.Command{
+		Use:   "export",
+		Short: "Export the current world to a .mcworld file.",
+		Args: func(cmd *cobra.Command, args []string) error {
+			return cobra.ExactArgs(1)(cmd, args)
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			dir, err := cmd.Flags().GetString("destination")
+			if err != nil {
+				panic(err)
+			}
+
+			err = craft.ExportMCWorld(
+				docker.NewContainerOrExit(args[0]),
+				dir,
+			)
+			if err != nil {
+				logger.Error.Fatal(err)
+			}
+		},
+	}
+
+	command.Flags().StringP("destination", "d", "",
+		"Directory to save the .mcworld file.")
+
+	_ = command.MarkFlagRequired("destination")
+
+	return command
 }
 
 // NewVersionCmd returns the version command which prints the current craft version
