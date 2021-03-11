@@ -80,6 +80,17 @@ func TrimBackups(name string, keep int, skip bool) ([]string, error) {
 	return deleted, nil
 }
 
+// BackupExists returns true if a backed up server with the given server name exists.
+func BackupExists(name string) bool {
+	for _, b := range backupServerNames() {
+		if name == b {
+			return true
+		}
+	}
+
+	return false
+}
+
 func latestBackupFile(name string) os.FileInfo {
 	backups := backupFiles(name)
 	return backups[len(backups)-1]
@@ -91,7 +102,7 @@ func backupFiles(server string) []os.FileInfo {
 
 	err := filepath.Walk(d, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			log.Fatalf("Error getting backup file: %s", err)
+			logger.Error.Printf("Error getting backup file: %s", err)
 		}
 		infos = append(infos, info)
 		return nil
