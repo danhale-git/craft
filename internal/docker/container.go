@@ -95,9 +95,6 @@ func (d *Container) CopyFileFrom(containerPath string) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(b) == 0 {
-		return nil, fmt.Errorf("0 bytes returned frop copy operation")
-	}
 
 	return b, nil
 }
