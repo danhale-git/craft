@@ -34,4 +34,6 @@ sleep 2; craft backup testserver
 
 sleep 2; craft cmd testserver time set 0600
 
+sleep 2; craft export testserver -d /
+
 sleep 2; craft stop testserver
