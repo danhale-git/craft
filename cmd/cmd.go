@@ -334,8 +334,6 @@ func NewExportCommand() *cobra.Command {
 	command.Flags().StringP("destination", "d", "",
 		"Directory to save the .mcworld file.")
 
-	_ = command.MarkFlagRequired("destination")
-
 	return command
 }
 

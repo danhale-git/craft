@@ -52,10 +52,8 @@ sleep 2; echo "craft cmd testserver time set 0600"
 if ! craft cmd testserver time set 0600; then
   exit 1; fi
 
-sudo mkdir /testmcworld; sudo chmod 0777 testmcworld
-
 sleep 2; echo "craft export testserver -d ~"
-if ! craft export testserver -d /testmcworld; then
+if ! craft export testserver; then
   exit 1; fi
 
 sleep 2; echo "craft stop testserver"

@@ -223,6 +223,10 @@ func CopyBackup(c *docker.Container) (string, error) {
 
 // Exports the server's current world to the given destination directory.
 func ExportMCWorld(c *docker.Container, dest string) error {
+	if dest == "" {
+		dest = backupDirectory()
+	}
+
 	dir, err := os.Stat(dest)
 	if err != nil {
 		return err
