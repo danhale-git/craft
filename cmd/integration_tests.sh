@@ -42,7 +42,7 @@ craft backup testserver
 sleep 2; echo "craft cmd testserver time set 0600"
 craft cmd testserver time set 0600
 
-sleep 2; echo "craft export testserver -d /"
+sleep 2; echo "craft export testserver -d ~"
 craft export testserver -d /
 
 sleep 2; echo "craft stop testserver"
