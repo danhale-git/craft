@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 go install github.com/danhale-git/craft
-docker pull danhaledocker/craftmine:v1.7
+docker pull danhaledocker/craftmine:v1.8
 
 export PATH=$PATH:~/go/bin/
 
