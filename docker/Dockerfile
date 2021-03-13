@@ -10,8 +10,8 @@ RUN mkdir bedrock; cd bedrock; \
 
 # https://www.minecraft.net/en-us/download/server/bedrock
 RUN cd bedrock; \
-    wget https://minecraft.azureedge.net/bin-linux/bedrock-server-1.16.200.02.zip; \
-    unzip bedrock-server-1.16.200.02.zip
+    wget https://minecraft.azureedge.net/bin-linux/bedrock-server-1.16.210.06.zip; \
+    unzip bedrock-server-1.16.210.06.zip
 
 RUN mkdir bedrock/worlds; \
     mkdir bedrock/worlds/'Bedrock level' \

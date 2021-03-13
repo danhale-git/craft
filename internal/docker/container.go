@@ -24,7 +24,7 @@ const (
 	anyIP       = "0.0.0.0"                      // Refers to any/all IPv4 addresses
 	defaultPort = 19132                          // Default port for player connections
 	protocol    = "UDP"                          // MC uses UDP
-	imageName   = "danhaledocker/craftmine:v1.7" // The name of the docker image to use
+	imageName   = "danhaledocker/craftmine:v1.8" // The name of the docker image to use
 	stopTimeout = 10
 )
 
