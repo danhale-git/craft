@@ -84,7 +84,10 @@ func RunLatestBackup(name string, port int) (*docker.Container, error) {
 		return nil, fmt.Errorf("%s: running server: %s", name, err)
 	}
 
-	f := latestBackupFile(name)
+	f, err := latestBackupFile(name)
+	if err != nil {
+		return nil, err
+	}
 
 	err = restoreBackup(c, f.Name())
 	if err != nil {
@@ -226,7 +229,10 @@ func PrintServers(all bool) error {
 			continue
 		}
 
-		f := latestBackupFile(n)
+		f, err := latestBackupFile(n)
+		if err != nil {
+			continue
+		}
 
 		t, err := backup.FileTime(f.Name())
 		if err != nil {
