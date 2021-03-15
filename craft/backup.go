@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -140,7 +139,7 @@ func backupDirectory() string {
 	// Find home directory.
 	home, err := homedir.Dir()
 	if err != nil {
-		log.Fatalf("getting home directory: %s", err)
+		logger.Error.Fatalf("getting home directory: %s", err)
 	}
 
 	backupDir := path.Join(home, backupDirName)
@@ -149,7 +148,7 @@ func backupDirectory() string {
 	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
 		err = os.MkdirAll(backupDir, 0755)
 		if err != nil {
-			log.Fatalf("checking backup directory exists: %s", err)
+			logger.Error.Fatalf("checking backup directory exists: %s", err)
 		}
 	}
 
@@ -344,7 +343,7 @@ func addTarToZip(path string, tr *tar.Reader, zw *zip.Writer) error {
 		}
 
 		if err != nil {
-			log.Fatal(err)
+			logger.Error.Fatal(err)
 		}
 
 		// Read from tar archive
@@ -356,13 +355,13 @@ func addTarToZip(path string, tr *tar.Reader, zw *zip.Writer) error {
 		// Create file in zip archive
 		f, err := zw.Create(path)
 		if err != nil {
-			log.Fatal(err)
+			logger.Error.Fatal(err)
 		}
 
 		// Write file to zip archive
 		_, err = f.Write(b)
 		if err != nil {
-			log.Fatal(err)
+			logger.Error.Fatal(err)
 		}
 	}
 

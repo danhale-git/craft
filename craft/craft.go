@@ -3,7 +3,6 @@ package craft
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -235,12 +234,12 @@ func PrintServers(all bool) error {
 		}
 
 		if _, err := fmt.Fprintf(w, "%s\tstopped - %s\n", n, t.Format("02 Jan 2006 3:04PM")); err != nil {
-			log.Fatalf("Error writing to table: %s", err)
+			logger.Error.Fatalf("Error writing to table: %s", err)
 		}
 	}
 
 	if err = w.Flush(); err != nil {
-		log.Fatalf("Error writing output to console: %s", err)
+		logger.Error.Fatalf("Error writing output to console: %s", err)
 	}
 
 	return nil

@@ -7,11 +7,12 @@ import (
 	"bytes"
 	"fmt"
 	"io"
-	"log"
 	"path"
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/danhale-git/craft/internal/logger"
 )
 
 const mockTarContent = "some content"
@@ -109,7 +110,7 @@ func testRestoreFunc(z *zip.Reader, restoreFunc func(*zip.Reader, func(string, *
 			}
 
 			if err != nil {
-				log.Fatal(err)
+				logger.Error.Fatal(err)
 			}
 
 			fileNames[count] = path.Join(dest, hdr.Name)
@@ -139,23 +140,23 @@ func mockZip(files map[string]string) *zip.Reader {
 	for name, body := range files {
 		f, err := w.Create(name)
 		if err != nil {
-			log.Fatal(err)
+			logger.Error.Fatal(err)
 		}
 
 		_, err = f.Write([]byte(body))
 		if err != nil {
-			log.Fatal(err)
+			logger.Error.Fatal(err)
 		}
 	}
 
 	err := w.Close()
 	if err != nil {
-		log.Fatal(err)
+		logger.Error.Fatal(err)
 	}
 
 	r, err := zip.NewReader(bytes.NewReader(buf.Bytes()), int64(buf.Len()))
 	if err != nil {
-		log.Fatal(err)
+		logger.Error.Fatal(err)
 	}
 
 	return r
@@ -220,16 +221,16 @@ Changes to the level are resumed.
 			Size: int64(len(file.Body)),
 		}
 		if err := tw.WriteHeader(hdr); err != nil {
-			log.Fatal(err)
+			logger.Error.Fatal(err)
 		}
 
 		if _, err := tw.Write([]byte(file.Body)); err != nil {
-			log.Fatal(err)
+			logger.Error.Fatal(err)
 		}
 	}
 
 	if err := tw.Close(); err != nil {
-		log.Fatal(err)
+		logger.Error.Fatal(err)
 	}
 
 	return tar.NewReader(bytes.NewReader(buf.Bytes()))

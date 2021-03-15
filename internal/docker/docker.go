@@ -3,10 +3,10 @@ package docker
 import (
 	"context"
 	"fmt"
-	"log"
 	"strconv"
 	"strings"
 
+	"github.com/danhale-git/craft/internal/logger"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
 
@@ -18,7 +18,7 @@ import (
 func Client() *client.Client {
 	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		log.Fatalf("Error: Failed to create new docker client: %s", err)
+		logger.Error.Fatalf("Error: Failed to create new docker client: %s", err)
 	}
 
 	return c
@@ -35,7 +35,7 @@ func RunContainer(hostPort int, name string) (*Container, error) {
 
 	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		log.Fatalf("Error: Failed to create new docker client: %s", err)
+		logger.Error.Fatalf("Error: Failed to create new docker client: %s", err)
 	}
 
 	ctx := context.Background()

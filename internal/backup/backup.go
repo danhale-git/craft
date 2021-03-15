@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/danhale-git/craft/internal/logger"
 	"github.com/danhale-git/craft/internal/server"
 )
 
@@ -161,19 +161,19 @@ func SaveResume(command io.Writer, logs *bufio.Reader) error {
 func runCommand(cmd string, cli io.Writer, logs *bufio.Reader) {
 	_, err := cli.Write([]byte(cmd + "\n"))
 	if err != nil {
-		log.Fatalf("backup.go: running command `%s`: %s", cmd, err)
+		logger.Error.Fatalf("backup.go: running command `%s`: %s", cmd, err)
 	}
 
 	// Read command echo to discard it
 	if _, err := logs.ReadString('\n'); err != nil {
-		log.Fatalf("backup.go: retrieving echo for command `%s`: %s", cmd, err)
+		logger.Error.Fatalf("backup.go: retrieving echo for command `%s`: %s", cmd, err)
 	}
 }
 
 func readLine(logs *bufio.Reader) string {
 	res, err := logs.ReadString('\n')
 	if err != nil {
-		log.Fatalf("backup.go: reading logs: %s", err)
+		logger.Error.Fatalf("backup.go: reading logs: %s", err)
 	}
 
 	return res

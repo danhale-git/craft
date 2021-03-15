@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -16,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/danhale-git/craft/internal/logger"
 	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 )
@@ -58,7 +58,7 @@ func NewContainerOrExit(containerName string) *Container {
 func NewContainer(containerName string) (*Container, error) {
 	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		log.Fatalf("Error: Failed to create new docker client: %s", err)
+		logger.Error.Fatalf("Error: Failed to create new docker client: %s", err)
 	}
 
 	id, err := ContainerID(containerName, c)
