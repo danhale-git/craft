@@ -20,7 +20,7 @@ const (
 	saveQueryRetries = 100 // The number of times save query can run without the expected response
 	saveQueryDelayMS = 100 // The delay between save query retries, in milliseconds
 
-	FileNameTimeLayout = "02-01-2006_15-04" // The format of the file timestamp for the Go time package formatter
+	FileNameTimeLayout = "15-04_02-01-2006" // The format of the file timestamp for the Go time package formatter
 )
 
 // FileTime returns the time.Time the backup was taken, given the file name.
