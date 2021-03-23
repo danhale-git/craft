@@ -132,9 +132,23 @@ func NewCommandCmd() *cobra.Command {
 			return cobra.MinimumNArgs(2)(cmd, args)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			err := docker.NewContainerOrExit(args[0]).Command(args[1:])
+			c := docker.NewContainerOrExit(args[0])
+
+			logs, err := c.LogReader(0)
 			if err != nil {
+				logger.Error.Fatalf("retrieving log reader: %s", err)
+			}
+
+			if err = c.Command(args[1:]); err != nil {
 				logger.Error.Fatalf("running command '%s': %s", strings.Join(args[1:], " "), err)
+			}
+
+			// Wait for command to return before exiting
+			for i := 0; i < 2; i++ {
+				_, err := logs.ReadString('\n')
+				if err != nil {
+					logger.Error.Fatalf("reading response %d from logs: %s", i, err)
+				}
 			}
 		},
 	}
