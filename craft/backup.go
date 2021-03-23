@@ -37,132 +37,6 @@ func serverFiles() []string {
 	}
 }
 
-func TrimBackups(name string, keep int, skip bool) ([]string, error) {
-	deleted := make([]string, 0)
-
-	backups := backupFiles(name)
-	if keep >= len(backups) {
-		// No backups need to be deleted
-		return nil, nil
-	}
-
-	remove := backups[:len(backups)-keep]
-	d := filepath.Join(backupDirectory(), name)
-
-	// Check before removing files
-	if !skip {
-		fmt.Println()
-
-		for _, f := range remove {
-			fmt.Println(f.Name())
-		}
-
-		fmt.Print("Remove these files? (y/n): ")
-
-		text, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-
-		if strings.TrimSpace(text) != "y" {
-			fmt.Println("cancelled")
-			return nil, nil
-		}
-	}
-
-	for _, f := range remove {
-		if err := os.Remove(filepath.Join(d, f.Name())); err != nil {
-			logger.Error.Printf("removing file: %s", err)
-			continue
-		}
-
-		deleted = append(deleted, f.Name())
-	}
-
-	return deleted, nil
-}
-
-// BackupExists returns true if a backed up server with the given server name exists.
-func BackupExists(name string) bool {
-	for _, b := range backupServerNames() {
-		if name == b && len(backupFiles(name)) > 0 {
-			return true
-		}
-	}
-
-	return false
-}
-
-func latestBackupFile(name string) (os.FileInfo, error) {
-	backups := backupFiles(name)
-
-	switch len(backups) {
-	case 0:
-		return nil, fmt.Errorf("no backups files found for server '%s'", name)
-	case 1:
-		return backups[0], nil
-	default:
-		return backups[len(backups)-1], nil
-	}
-}
-
-func backupFiles(server string) []os.FileInfo {
-	infos := make([]os.FileInfo, 0)
-	d := filepath.Join(backupDirectory(), server)
-
-	err := filepath.Walk(d, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			logger.Error.Printf("Error getting backup file: %s", err)
-		}
-		infos = append(infos, info)
-		return nil
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	return backup.SortFilesByDate(infos)
-}
-
-// backupServerNames returns a slice with the names of all backed up servers.
-func backupServerNames() []string {
-	backupDir := backupDirectory()
-	infos, err := ioutil.ReadDir(backupDir)
-
-	if err != nil {
-		logger.Panicf("reading directory '%s': %s", backupDir, err)
-	}
-
-	names := make([]string, 0)
-
-	for _, f := range infos {
-		if !f.IsDir() {
-			continue
-		}
-
-		names = append(names, f.Name())
-	}
-
-	return names
-}
-
-func backupDirectory() string {
-	// Find home directory.
-	home, err := homedir.Dir()
-	if err != nil {
-		logger.Error.Fatalf("getting home directory: %s", err)
-	}
-
-	backupDir := path.Join(home, backupDirName)
-
-	// Create directory if it doesn't exist
-	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
-		err = os.MkdirAll(backupDir, 0755)
-		if err != nil {
-			logger.Error.Fatalf("checking backup directory exists: %s", err)
-		}
-	}
-
-	return backupDir
-}
-
 // CopyBackup saves a backup to the default local directory.
 func CopyBackup(c *docker.Container) (string, error) {
 	backupPath := filepath.Join(backupDirectory(), c.ContainerName)
@@ -288,7 +162,7 @@ func ExportMCWorld(c *docker.Container, dest string) error {
 	}
 
 	if err := backup.SaveResume(cmd, logs); err != nil {
-		logger.Error.Printf("error when running `save resume` (server may be in a bad state)")
+		logger.Error.Printf("error when running `save resume` (server may be in a bad state - try running 'craft cmd <server> save resume')")
 	}
 
 	mcWorld := MCWorld{Path: filePath}
@@ -320,6 +194,132 @@ func copyFiles(c *docker.Container, f io.Writer, containerPrefix string, paths [
 	}
 
 	return nil
+}
+
+func TrimBackups(name string, keep int, skip bool) ([]string, error) {
+	deleted := make([]string, 0)
+
+	backups := backupFiles(name)
+	if keep >= len(backups) {
+		// No backups need to be deleted
+		return nil, nil
+	}
+
+	remove := backups[:len(backups)-keep]
+	d := filepath.Join(backupDirectory(), name)
+
+	// Check before removing files
+	if !skip {
+		fmt.Println()
+
+		for _, f := range remove {
+			fmt.Println(f.Name())
+		}
+
+		fmt.Print("Remove these files? (y/n): ")
+
+		text, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+
+		if strings.TrimSpace(text) != "y" {
+			fmt.Println("cancelled")
+			return nil, nil
+		}
+	}
+
+	for _, f := range remove {
+		if err := os.Remove(filepath.Join(d, f.Name())); err != nil {
+			logger.Error.Printf("removing file: %s", err)
+			continue
+		}
+
+		deleted = append(deleted, f.Name())
+	}
+
+	return deleted, nil
+}
+
+// BackupExists returns true if a backed up server with the given server name exists.
+func BackupExists(name string) bool {
+	for _, b := range backupServerNames() {
+		if name == b && len(backupFiles(name)) > 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+func latestBackupFile(name string) (os.FileInfo, error) {
+	backups := backupFiles(name)
+
+	switch len(backups) {
+	case 0:
+		return nil, fmt.Errorf("no backups files found for server '%s'", name)
+	case 1:
+		return backups[0], nil
+	default:
+		return backups[len(backups)-1], nil
+	}
+}
+
+func backupFiles(server string) []os.FileInfo {
+	infos := make([]os.FileInfo, 0)
+	d := filepath.Join(backupDirectory(), server)
+
+	err := filepath.Walk(d, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			logger.Error.Printf("Error getting backup file: %s", err)
+		}
+		infos = append(infos, info)
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
+
+	return backup.SortFilesByDate(infos)
+}
+
+// backupServerNames returns a slice with the names of all backed up servers.
+func backupServerNames() []string {
+	backupDir := backupDirectory()
+	infos, err := ioutil.ReadDir(backupDir)
+
+	if err != nil {
+		logger.Panicf("reading directory '%s': %s", backupDir, err)
+	}
+
+	names := make([]string, 0)
+
+	for _, f := range infos {
+		if !f.IsDir() {
+			continue
+		}
+
+		names = append(names, f.Name())
+	}
+
+	return names
+}
+
+func backupDirectory() string {
+	// Find home directory.
+	home, err := homedir.Dir()
+	if err != nil {
+		logger.Error.Fatalf("getting home directory: %s", err)
+	}
+
+	backupDir := path.Join(home, backupDirName)
+
+	// Create directory if it doesn't exist
+	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
+		err = os.MkdirAll(backupDir, 0755)
+		if err != nil {
+			logger.Error.Fatalf("checking backup directory exists: %s", err)
+		}
+	}
+
+	return backupDir
 }
 
 func restoreBackup(d *docker.Container, backupName string) error {
