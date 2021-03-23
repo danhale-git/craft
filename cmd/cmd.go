@@ -145,9 +145,13 @@ func NewCommandCmd() *cobra.Command {
 
 			// Wait for command to return before exiting
 			for i := 0; i < 2; i++ {
-				_, err := logs.ReadString('\n')
+				response, err := logs.ReadString('\n')
 				if err != nil {
 					logger.Error.Fatalf("reading response %d from logs: %s", i, err)
+				}
+
+				if strings.HasPrefix(response, "Syntax error:") {
+					logger.Error.Printf("error reported from server cli: %s", response)
 				}
 			}
 		},
