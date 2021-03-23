@@ -97,7 +97,7 @@ func latestBackupFile(name string) (os.FileInfo, error) {
 	case 0:
 		return nil, fmt.Errorf("no backups files found for server '%s'", name)
 	case 1:
-		return backups[1], nil
+		return backups[0], nil
 	default:
 		return backups[len(backups)-1], nil
 	}
