@@ -71,7 +71,7 @@ func CreateServer(name string, port int, props []string, mcworld ZipOpener) erro
 
 // RunLatestBackup sorts all available backup files per date and starts a server from the latest backup.
 func RunLatestBackup(name string, port int) (*docker.Container, error) {
-	if _, err := docker.NewContainer(name); err == nil {
+	if _, err := docker.GetContainer(name); err == nil {
 		return nil, fmt.Errorf("server '%s' is already running (run `craft list`)", name)
 	}
 
@@ -194,7 +194,7 @@ func PrintServers(all bool) error {
 	}
 
 	for _, s := range servers {
-		c, err := docker.NewContainer(s.ContainerName)
+		c, err := docker.GetContainer(s.ContainerName)
 		if err != nil {
 			return fmt.Errorf("creating docker client for container '%s': %s", s.ContainerName, err)
 		}

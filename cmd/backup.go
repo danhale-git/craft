@@ -64,7 +64,7 @@ func backupCommand(cmd *cobra.Command, args []string) {
 	deleted := make([]string, 0)
 
 	for _, name := range args {
-		c := docker.NewContainerOrExit(name)
+		c := docker.GetContainerOrExit(name)
 
 		// Take a new backup
 		name, err := craft.CopyBackup(c)

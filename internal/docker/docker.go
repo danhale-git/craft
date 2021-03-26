@@ -14,6 +14,8 @@ import (
 	"github.com/docker/docker/client"
 )
 
+const craftLabel = "danhale-git/craft"
+
 // Client creates a default docker client.
 func Client() *client.Client {
 	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
@@ -67,6 +69,9 @@ func RunContainer(hostPort int, name string) (*Container, error) {
 			AttachStderr: true,
 			Tty:          true,
 			OpenStdin:    true,
+			Labels: map[string]string{
+				craftLabel: "",
+			},
 		},
 		&container.HostConfig{
 			PortBindings: portBinding,
@@ -170,15 +175,19 @@ func ActiveServerClients() ([]*Container, error) {
 		return nil, fmt.Errorf("getting server names: %s", err)
 	}
 
-	clients := make([]*Container, len(names))
+	clients := make([]*Container, 0)
 
-	for i, n := range names {
-		c, err := NewContainer(n)
+	for _, n := range names {
+		c, err := GetContainer(n)
 		if err != nil {
+			if _, ok := err.(*NotACraftContainerError); ok {
+				continue
+			}
+
 			return nil, fmt.Errorf("creating client for container '%s': %s", n, err)
 		}
 
-		clients[i] = c
+		clients = append(clients, c)
 	}
 
 	return clients, nil
