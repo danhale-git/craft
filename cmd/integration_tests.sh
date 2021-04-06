@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 go install github.com/danhale-git/craft
-#docker pull danhaledocker/craftmine:v1.7
 
-export PATH=$PATH:~/go/bin/
+export PATH="$PATH:~/go/bin/"
 
 echo "craft build"
 if ! craft build; then
@@ -22,15 +21,9 @@ if [[ "$listOut" != "testserver   running - port 19132" ]]; then
   exit 1
 fi
 
-echo "craft configure testserver --prop gamemode=creative"
-if ! craft configure testserver --prop gamemode=creative; then
+echo "craft configure testserver --prop allow-cheats=true"
+if ! craft configure testserver --prop allow-cheats=true; then
   exit 1; fi
-
-if ! mode=$(docker exec testserver cat /bedrock/server.properties | grep gamemode); then
-  exit 1; fi
-if [[ "$mode" != "gamemode=creative" ]]; then
-  exit 1
-fi
 
 echo "craft stop testserver"
 if ! craft stop testserver; then
