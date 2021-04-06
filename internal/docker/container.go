@@ -15,6 +15,8 @@ import (
 	"strings"
 	"time"
 
+	_ "embed"
+
 	"github.com/danhale-git/craft/internal/logger"
 	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
@@ -24,7 +26,7 @@ const (
 	anyIP       = "0.0.0.0"                      // Refers to any/all IPv4 addresses
 	defaultPort = 19132                          // Default port for player connections
 	protocol    = "UDP"                          // MC uses UDP
-	imageName   = "danhaledocker/craftmine:v1.7" // The name of the docker image to use
+	imageName   = "danhaledocker/craftmine:v1.9" // The name of the docker image to use
 	stopTimeout = 10
 )
 

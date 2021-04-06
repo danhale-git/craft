@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strings"
 
@@ -36,6 +37,7 @@ func commands() []func() *cobra.Command {
 		NewListCmd,
 		NewConfigureCmd,
 		NewExportCommand,
+		NewBuildCommand,
 		NewVersionCmd,
 	}
 }
@@ -55,6 +57,15 @@ func NewRootCmd() *cobra.Command {
 			}
 
 			logger.Init(logPath, logLevel, fmt.Sprintf("[%s]", cmd.Name()))
+
+			ok, err := docker.CheckImage()
+			if err != nil {
+				log.Fatalf("Error checking docker images: %s", err)
+			}
+			if !ok && cmd.Name() != "build" {
+				fmt.Println("server image doesn't exist, run 'craft build' to build it")
+				os.Exit(0)
+			}
 		},
 	}
 
@@ -351,6 +362,22 @@ func NewExportCommand() *cobra.Command {
 
 	command.Flags().StringP("destination", "d", "",
 		"Directory to save the .mcworld file.")
+
+	return command
+}
+
+// NewExportCommand returns the version command which prints the current craft version
+func NewBuildCommand() *cobra.Command {
+	command := &cobra.Command{
+		Use:   "build",
+		Short: "Build the server image.",
+		Args:  cobra.NoArgs,
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := docker.BuildImage(); err != nil {
+				log.Fatalf("Error building image: %s", err)
+			}
+		},
+	}
 
 	return command
 }

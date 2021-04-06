@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 go install github.com/danhale-git/craft
-docker pull danhaledocker/craftmine:v1.7
+#docker pull danhaledocker/craftmine:v1.7
 
 export PATH=$PATH:~/go/bin/
 
-# TODO: Remove sleep 2 when issue 40 is resolved: https://github.com/danhale-git/craft/issues/40
+echo "craft build"
+if ! craft build; then
+  exit 1; fi
+
 echo "craft version"
 if ! craft version; then
   exit 1; fi
