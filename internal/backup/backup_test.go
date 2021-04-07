@@ -18,7 +18,7 @@ import (
 const mockTarContent = "some content"
 
 func TestFileTime(t *testing.T) {
-	valid := "test_01-02-2021_18-43.zip"
+	valid := "test_18-43_01-02-2021.zip"
 
 	var want int64 = 1612204980
 
@@ -33,7 +33,7 @@ func TestFileTime(t *testing.T) {
 		t.Errorf("unexpected value returned: want %d: got %d", want, got)
 	}
 
-	invalid := "01-02-2021_18-43.zip"
+	invalid := "18-43_01-02-2021.zip"
 
 	_, err = FileTime(invalid)
 	if err == nil {
