@@ -3,6 +3,7 @@ package craft
 import (
 	"archive/zip"
 	"fmt"
+	"path/filepath"
 )
 
 type ZipOpener interface {
@@ -25,10 +26,15 @@ func (w MCWorld) Open() (*zip.ReadCloser, error) {
 }
 
 func (w MCWorld) check() error {
-	expected := map[string]bool{
-		"db/CURRENT":    false,
-		"level.dat":     false,
-		"levelname.txt": false,
+	expected := []string{
+		filepath.Join("db", "CURRENT"),
+		"level.dat",
+		"levelname.txt",
+	}
+
+	results := make(map[string]bool)
+	for _, n := range expected {
+		results[n] = false
 	}
 
 	zr, err := zip.OpenReader(w.Path)
@@ -37,13 +43,13 @@ func (w MCWorld) check() error {
 	}
 
 	for _, f := range zr.File {
-		expected[f.Name] = true
+		results[f.Name] = true
 	}
 
-	if !(expected["db/CURRENT"] &&
-		expected["level.dat"] &&
-		expected["levelname.txt"]) {
-		return fmt.Errorf("missing one of: db, level.dat, levelname.txt")
+	for _, n := range expected {
+		if !results[n] {
+			return fmt.Errorf("missing expected file '%s'", n)
+		}
 	}
 
 	if err = zr.Close(); err != nil {

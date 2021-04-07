@@ -3,7 +3,6 @@ package craft
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -72,12 +71,23 @@ func CreateServer(name string, port int, props []string, mcworld ZipOpener) erro
 
 // RunLatestBackup sorts all available backup files per date and starts a server from the latest backup.
 func RunLatestBackup(name string, port int) (*docker.Container, error) {
+	if _, err := docker.GetContainer(name); err == nil {
+		return nil, fmt.Errorf("server '%s' is already running (run `craft list`)", name)
+	}
+
+	if !BackupExists(name) {
+		return nil, fmt.Errorf("stopped server with name '%s' doesn't exist", name)
+	}
+
 	c, err := docker.RunContainer(port, name)
 	if err != nil {
 		return nil, fmt.Errorf("%s: running server: %s", name, err)
 	}
 
-	f := latestBackupFile(name)
+	f, err := latestBackupFile(name)
+	if err != nil {
+		return nil, err
+	}
 
 	err = restoreBackup(c, f.Name())
 	if err != nil {
@@ -184,7 +194,7 @@ func PrintServers(all bool) error {
 	}
 
 	for _, s := range servers {
-		c, err := docker.NewContainer(s.ContainerName)
+		c, err := docker.GetContainer(s.ContainerName)
 		if err != nil {
 			return fmt.Errorf("creating docker client for container '%s': %s", s.ContainerName, err)
 		}
@@ -219,7 +229,10 @@ func PrintServers(all bool) error {
 			continue
 		}
 
-		f := latestBackupFile(n)
+		f, err := latestBackupFile(n)
+		if err != nil {
+			continue
+		}
 
 		t, err := backup.FileTime(f.Name())
 		if err != nil {
@@ -227,12 +240,12 @@ func PrintServers(all bool) error {
 		}
 
 		if _, err := fmt.Fprintf(w, "%s\tstopped - %s\n", n, t.Format("02 Jan 2006 3:04PM")); err != nil {
-			log.Fatalf("Error writing to table: %s", err)
+			logger.Error.Fatalf("Error writing to table: %s", err)
 		}
 	}
 
 	if err = w.Flush(); err != nil {
-		log.Fatalf("Error writing output to console: %s", err)
+		logger.Error.Fatalf("Error writing output to console: %s", err)
 	}
 
 	return nil

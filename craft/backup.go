@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"os"
 	"path"
 	"path/filepath"
@@ -36,6 +35,165 @@ func serverFiles() []string {
 	return []string{
 		server.LocalPaths.ServerProperties, // server.properties
 	}
+}
+
+// CopyBackup saves a backup to the default local directory.
+func CopyBackup(c *docker.Container) (string, error) {
+	backupPath := filepath.Join(backupDirectory(), c.ContainerName)
+	fileName := fmt.Sprintf("%s_%s.zip", c.ContainerName, time.Now().Format(backup.FileNameTimeLayout))
+	backupFilePath := path.Join(backupPath, fileName)
+
+	// Create the directory if it doesn't exist
+	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+		err = os.MkdirAll(backupPath, 0755)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	// Create the file
+	f, err := os.Create(backupFilePath)
+	if err != nil {
+		return "", err
+	}
+
+	// Write to server CLI
+	cmd, err := c.CommandWriter()
+	if err != nil {
+		return "", err
+	}
+
+	// Read from server CLI
+	logs, err := c.LogReader(0)
+	if err != nil {
+		return "", err
+	}
+
+	paths, err := backup.SaveHoldQuery(cmd, logs)
+	if err != nil {
+		return "", err
+	}
+
+	// Prepend path from server directory to world directory
+	for i, p := range paths {
+		paths[i] = filepath.Join(server.LocalPaths.Worlds, p)
+	}
+
+	paths = append(paths, serverFiles()...)
+
+	// Copy server files and write as zip data
+	if err = copyFiles(c, f, server.Directory, paths); err != nil {
+		if err := f.Close(); err != nil {
+			logger.Error.Printf("failed to close backup file after error")
+		}
+
+		// Clean up bad backup file
+		if err := os.Remove(backupFilePath); err != nil {
+			logger.Error.Printf("failed to remove backup file after error: %s", err)
+		}
+
+		return "", err
+	}
+
+	if err := backup.SaveResume(cmd, logs); err != nil {
+		logger.Error.Printf("error when running `save resume` (server may be in a bad state)")
+	}
+
+	return fileName, nil
+}
+
+// Exports the server's current world to the given destination directory.
+func ExportMCWorld(c *docker.Container, dest string) error {
+	if dest == "" {
+		dest = backupDirectory()
+	}
+
+	dir, err := os.Stat(dest)
+	if err != nil {
+		return err
+	}
+
+	filePath := filepath.Join(dest, fmt.Sprintf("%s.mcworld", c.ContainerName))
+
+	if !dir.Mode().IsDir() {
+		return fmt.Errorf("'%s' is not a directory", dest)
+	}
+
+	// Create the file
+	f, err := os.Create(filePath)
+	if err != nil {
+		return err
+	}
+
+	// Write to server CLI
+	cmd, err := c.CommandWriter()
+	if err != nil {
+		return err
+	}
+
+	// Read from server CLI
+	logs, err := c.LogReader(0)
+	if err != nil {
+		return err
+	}
+
+	paths, err := backup.SaveHoldQuery(cmd, logs)
+	if err != nil {
+		return err
+	}
+
+	// Prepend path from server directory to world directory
+	for i, p := range paths {
+		paths[i] = filepath.Join(strings.Split(p, "/")[1:]...)
+	}
+
+	// Copy server files and write as zip data
+	if err = copyFiles(c, f, server.FullPaths.DefaultWorld, paths); err != nil {
+		if err := f.Close(); err != nil {
+			logger.Error.Printf("failed to close backup file after error")
+		}
+
+		// Clean up bad backup file
+		if err := os.Remove(dest); err != nil {
+			logger.Error.Printf("failed to remove backup file after error: %s", err)
+		}
+
+		return err
+	}
+
+	if err := backup.SaveResume(cmd, logs); err != nil {
+		logger.Error.Printf("error when running `save resume` (server may be in a bad state - try running 'craft cmd <server> save resume')")
+	}
+
+	mcWorld := MCWorld{Path: filePath}
+	if err := mcWorld.check(); err != nil {
+		return fmt.Errorf("invalid world file after exporting: %s", err)
+	}
+
+	return nil
+}
+
+func copyFiles(c *docker.Container, f io.Writer, containerPrefix string, paths []string) error {
+	// Write zip data to out file
+	zw := zip.NewWriter(f)
+
+	for _, p := range paths {
+		tr, err := c.CopyFrom(filepath.Join(containerPrefix, p))
+		if err != nil {
+			return err
+		}
+
+		err = addTarToZip(p, tr, zw)
+		if err != nil {
+			return fmt.Errorf("copying file from server to zip: %s", err)
+		}
+	}
+
+	if err := zw.Close(); err != nil {
+		return fmt.Errorf("closing zip writer: %s", err)
+	}
+
+	return nil
 }
 
 func TrimBackups(name string, keep int, skip bool) ([]string, error) {
@@ -80,9 +238,28 @@ func TrimBackups(name string, keep int, skip bool) ([]string, error) {
 	return deleted, nil
 }
 
-func latestBackupFile(name string) os.FileInfo {
+// BackupExists returns true if a backed up server with the given server name exists.
+func BackupExists(name string) bool {
+	for _, b := range backupServerNames() {
+		if name == b && len(backupFiles(name)) > 0 {
+			return true
+		}
+	}
+
+	return false
+}
+
+func latestBackupFile(name string) (os.FileInfo, error) {
 	backups := backupFiles(name)
-	return backups[len(backups)-1]
+
+	switch len(backups) {
+	case 0:
+		return nil, fmt.Errorf("no backups files found for server '%s'", name)
+	case 1:
+		return backups[0], nil
+	default:
+		return backups[len(backups)-1], nil
+	}
 }
 
 func backupFiles(server string) []os.FileInfo {
@@ -91,7 +268,7 @@ func backupFiles(server string) []os.FileInfo {
 
 	err := filepath.Walk(d, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			log.Fatalf("Error getting backup file: %s", err)
+			logger.Error.Printf("Error getting backup file: %s", err)
 		}
 		infos = append(infos, info)
 		return nil
@@ -129,7 +306,7 @@ func backupDirectory() string {
 	// Find home directory.
 	home, err := homedir.Dir()
 	if err != nil {
-		log.Fatalf("getting home directory: %s", err)
+		logger.Error.Fatalf("getting home directory: %s", err)
 	}
 
 	backupDir := path.Join(home, backupDirName)
@@ -138,96 +315,13 @@ func backupDirectory() string {
 	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
 		err = os.MkdirAll(backupDir, 0755)
 		if err != nil {
-			log.Fatalf("checking backup directory exists: %s", err)
+			logger.Error.Fatalf("checking backup directory exists: %s", err)
 		}
 	}
 
 	return backupDir
 }
 
-func CopyBackup(c *docker.Container) (string, error) {
-	backupPath := filepath.Join(backupDirectory(), c.ContainerName)
-	fileName := fmt.Sprintf("%s_%s.zip", c.ContainerName, time.Now().Format(backup.FileNameTimeLayout))
-	backupFilePath := path.Join(backupPath, fileName)
-
-	// Create the directory if it doesn't exist
-	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
-		err = os.MkdirAll(backupPath, 0755)
-		if err != nil {
-			return "", err
-		}
-	}
-
-	// Create the file
-	f, err := os.Create(backupFilePath)
-	if err != nil {
-		return "", err
-	}
-
-	// Write to server CLI
-	cmd, err := c.CommandWriter()
-	if err != nil {
-		return "", err
-	}
-
-	// Read from server CLI
-	logs, err := c.LogReader(0)
-	if err != nil {
-		return "", err
-	}
-
-	paths, err := backup.SaveHoldQuery(cmd, logs)
-	if err != nil {
-		return "", err
-	}
-
-	paths = append(paths, serverFiles()...)
-
-	// Copy server files and write as zip data
-	if err = copyFiles(c, f, paths); err != nil {
-		if err := f.Close(); err != nil {
-			logger.Error.Printf("failed to close backup file after error")
-		}
-
-		// Clean up bad backup file
-		if err := os.Remove(backupFilePath); err != nil {
-			logger.Error.Printf("failed to remove backup file after error: %s", err)
-		}
-
-		return "", err
-	}
-
-	if err := backup.SaveResume(cmd, logs); err != nil {
-		logger.Error.Printf("error when running `save resume` (server may be in a bad state)")
-	}
-
-	return fileName, nil
-}
-
-func copyFiles(c *docker.Container, f io.Writer, paths []string) error {
-	// Write zip data to out file
-	zw := zip.NewWriter(f)
-
-	for _, p := range paths {
-		tr, err := c.CopyFrom(filepath.Join(server.Directory, p))
-		if err != nil {
-			return err
-		}
-
-		err = addTarToZip(p, tr, zw)
-		if err != nil {
-			return fmt.Errorf("copying file from server to zip: %s", err)
-		}
-	}
-
-	if err := zw.Close(); err != nil {
-		return fmt.Errorf("closing zip writer: %s", err)
-	}
-
-	return nil
-}
-
-// RestoreLatestBackup finds the latest backup and restores it to the server.
 func restoreBackup(d *docker.Container, backupName string) error {
 	backupPath := filepath.Join(backupDirectory(), d.ContainerName)
 
@@ -257,7 +351,7 @@ func addTarToZip(path string, tr *tar.Reader, zw *zip.Writer) error {
 		}
 
 		if err != nil {
-			log.Fatal(err)
+			logger.Error.Fatal(err)
 		}
 
 		// Read from tar archive
@@ -269,13 +363,13 @@ func addTarToZip(path string, tr *tar.Reader, zw *zip.Writer) error {
 		// Create file in zip archive
 		f, err := zw.Create(path)
 		if err != nil {
-			log.Fatal(err)
+			logger.Error.Fatal(err)
 		}
 
 		// Write file to zip archive
 		_, err = f.Write(b)
 		if err != nil {
-			log.Fatal(err)
+			logger.Error.Fatal(err)
 		}
 	}
 

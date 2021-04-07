@@ -8,11 +8,11 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/danhale-git/craft/internal/logger"
 	"github.com/danhale-git/craft/internal/server"
 )
 
@@ -20,7 +20,7 @@ const (
 	saveQueryRetries = 100 // The number of times save query can run without the expected response
 	saveQueryDelayMS = 100 // The delay between save query retries, in milliseconds
 
-	FileNameTimeLayout = "02-01-2006_15-04" // The format of the file timestamp for the Go time package formatter
+	FileNameTimeLayout = "15-04_02-01-2006" // The format of the file timestamp for the Go time package formatter
 )
 
 // FileTime returns the time.Time the backup was taken, given the file name.
@@ -136,10 +136,7 @@ func SaveHoldQuery(command io.Writer, logs *bufio.Reader) ([]string, error) {
 
 			worldFiles := strings.Split(worldFilesString, ", ")
 			for i, f := range worldFiles {
-				worldFiles[i] = filepath.Join(
-					server.LocalPaths.Worlds,
-					strings.Split(f, ":")[0],
-				)
+				worldFiles[i] = strings.Split(f, ":")[0]
 			}
 
 			return worldFiles, nil
@@ -164,19 +161,19 @@ func SaveResume(command io.Writer, logs *bufio.Reader) error {
 func runCommand(cmd string, cli io.Writer, logs *bufio.Reader) {
 	_, err := cli.Write([]byte(cmd + "\n"))
 	if err != nil {
-		log.Fatalf("backup.go: running command `%s`: %s", cmd, err)
+		logger.Error.Fatalf("backup.go: running command `%s`: %s", cmd, err)
 	}
 
 	// Read command echo to discard it
 	if _, err := logs.ReadString('\n'); err != nil {
-		log.Fatalf("backup.go: retrieving echo for command `%s`: %s", cmd, err)
+		logger.Error.Fatalf("backup.go: retrieving echo for command `%s`: %s", cmd, err)
 	}
 }
 
 func readLine(logs *bufio.Reader) string {
 	res, err := logs.ReadString('\n')
 	if err != nil {
-		log.Fatalf("backup.go: reading logs: %s", err)
+		logger.Error.Fatalf("backup.go: reading logs: %s", err)
 	}
 
 	return res

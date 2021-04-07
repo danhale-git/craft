@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strings"
 
@@ -35,6 +36,8 @@ func commands() []func() *cobra.Command {
 		NewLogsCmd,
 		NewListCmd,
 		NewConfigureCmd,
+		NewExportCommand,
+		NewBuildCommand,
 		NewVersionCmd,
 	}
 }
@@ -54,6 +57,15 @@ func NewRootCmd() *cobra.Command {
 			}
 
 			logger.Init(logPath, logLevel, fmt.Sprintf("[%s]", cmd.Name()))
+
+			ok, err := docker.CheckImage()
+			if err != nil {
+				log.Fatalf("Error checking docker images: %s", err)
+			}
+			if !ok && cmd.Name() != "build" {
+				fmt.Println("server image doesn't exist, run 'craft build' to build it")
+				os.Exit(0)
+			}
 		},
 	}
 
@@ -131,9 +143,27 @@ func NewCommandCmd() *cobra.Command {
 			return cobra.MinimumNArgs(2)(cmd, args)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			err := docker.NewContainerOrExit(args[0]).Command(args[1:])
+			c := docker.GetContainerOrExit(args[0])
+
+			logs, err := c.LogReader(0)
 			if err != nil {
+				logger.Error.Fatalf("retrieving log reader: %s", err)
+			}
+
+			if err = c.Command(args[1:]); err != nil {
 				logger.Error.Fatalf("running command '%s': %s", strings.Join(args[1:], " "), err)
+			}
+
+			// Wait for command to return before exiting
+			for i := 0; i < 2; i++ {
+				response, err := logs.ReadString('\n')
+				if err != nil {
+					logger.Error.Fatalf("reading response %d from logs: %s", i, err)
+				}
+
+				if strings.HasPrefix(response, "Syntax error:") {
+					logger.Error.Printf("error reported from server cli: %s", response)
+				}
 			}
 		},
 	}
@@ -201,7 +231,7 @@ func NewStopCmd() *cobra.Command {
 
 			for _, name := range args {
 				// TODO: Should skip here if ContainerNotFoundError, not exit
-				c := docker.NewContainerOrExit(name)
+				c := docker.GetContainerOrExit(name)
 				if _, err := craft.CopyBackup(c); err != nil {
 					logger.Error.Printf("%s: error while taking backup: %s", c.ContainerName, err)
 					continue
@@ -229,7 +259,7 @@ func NewLogsCmd() *cobra.Command {
 			return cobra.ExactArgs(1)(cmd, args)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			c := docker.NewContainerOrExit(args[0])
+			c := docker.GetContainerOrExit(args[0])
 
 			tail, err := cmd.Flags().GetInt("tail")
 			if err != nil {
@@ -286,7 +316,7 @@ func NewConfigureCmd() *cobra.Command {
 			return cobra.RangeArgs(1, 1)(cmd, args)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			c := docker.NewContainerOrExit(args[0])
+			c := docker.GetContainerOrExit(args[0])
 
 			props, err := cmd.Flags().GetStringSlice("prop")
 			if err != nil {
@@ -304,6 +334,52 @@ func NewConfigureCmd() *cobra.Command {
 	_ = configureCmd.MarkFlagRequired("prop")
 
 	return configureCmd
+}
+
+// NewExportCommand returns the version command which prints the current craft version
+func NewExportCommand() *cobra.Command {
+	command := &cobra.Command{
+		Use:   "export",
+		Short: "Export the current world to a .mcworld file.",
+		Args: func(cmd *cobra.Command, args []string) error {
+			return cobra.ExactArgs(1)(cmd, args)
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			dir, err := cmd.Flags().GetString("destination")
+			if err != nil {
+				panic(err)
+			}
+
+			err = craft.ExportMCWorld(
+				docker.GetContainerOrExit(args[0]),
+				dir,
+			)
+			if err != nil {
+				logger.Error.Fatal(err)
+			}
+		},
+	}
+
+	command.Flags().StringP("destination", "d", "",
+		"Directory to save the .mcworld file.")
+
+	return command
+}
+
+// NewExportCommand returns the version command which prints the current craft version
+func NewBuildCommand() *cobra.Command {
+	command := &cobra.Command{
+		Use:   "build",
+		Short: "Build the server image.",
+		Args:  cobra.NoArgs,
+		Run: func(cmd *cobra.Command, args []string) {
+			if err := docker.BuildImage(); err != nil {
+				log.Fatalf("Error building image: %s", err)
+			}
+		},
+	}
+
+	return command
 }
 
 // NewVersionCmd returns the version command which prints the current craft version

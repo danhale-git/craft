@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -16,6 +15,9 @@ import (
 	"strings"
 	"time"
 
+	_ "embed"
+
+	"github.com/danhale-git/craft/internal/logger"
 	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 )
@@ -24,7 +26,7 @@ const (
 	anyIP       = "0.0.0.0"                      // Refers to any/all IPv4 addresses
 	defaultPort = 19132                          // Default port for player connections
 	protocol    = "UDP"                          // MC uses UDP
-	imageName   = "danhaledocker/craftmine:v1.8" // The name of the docker image to use
+	imageName   = "danhaledocker/craftmine:v1.9" // The name of the docker image to use
 	stopTimeout = 10
 )
 
@@ -34,15 +36,18 @@ type Container struct {
 	ContainerName, containerID string
 }
 
-// NewContainerOrExit is a convenience function for attempting to find an existing docker container with the given name.
+// GetContainerOrExit is a convenience function for attempting to find an existing docker container with the given name.
 // If not found, a helpful error message is printed and the program exits without error.
-func NewContainerOrExit(containerName string) *Container {
-	d, err := NewContainer(containerName)
+func GetContainerOrExit(containerName string) *Container {
+	d, err := GetContainer(containerName)
 
 	if err != nil {
 		// Container was not found
 		if _, ok := err.(*ContainerNotFoundError); ok {
-			fmt.Printf("Error: server with name '%s' does not exist\n", containerName)
+			logger.Info.Println(err)
+			os.Exit(0)
+		} else if _, ok := err.(*NotACraftContainerError); ok {
+			logger.Info.Println(err)
 			os.Exit(0)
 		}
 
@@ -53,12 +58,12 @@ func NewContainerOrExit(containerName string) *Container {
 	return d
 }
 
-// NewContainer returns a new default docker container API client for an existing container. If the given container name
+// GetContainer returns a new default docker container API client for an existing container. If the given container name
 // doesn't exist an error of type ContainerNotFoundError is returned.
-func NewContainer(containerName string) (*Container, error) {
+func GetContainer(containerName string) (*Container, error) {
 	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		log.Fatalf("Error: Failed to create new docker client: %s", err)
+		logger.Error.Fatalf("Error: Failed to create new docker client: %s", err)
 	}
 
 	id, err := ContainerID(containerName, c)
@@ -72,7 +77,29 @@ func NewContainer(containerName string) (*Container, error) {
 		containerID:        id,
 	}
 
+	ok, err := d.IsCraftServer()
+	if err != nil {
+		return nil, err
+	}
+
+	if !ok {
+		return nil, &NotACraftContainerError{Name: containerName}
+	}
+
 	return &d, nil
+}
+
+// IsCraftServer returns true if the container has a label with a key matching craftLabel. Craft containers are given
+// this label on creation.
+func (d *Container) IsCraftServer() (bool, error) {
+	containerJSON, err := d.ContainerInspect(context.Background(), d.containerID)
+	if err != nil {
+		return false, fmt.Errorf("inspecting container: %s", err)
+	}
+
+	_, ok := containerJSON.Config.Labels[craftLabel]
+
+	return ok, nil
 }
 
 // CopyFileFrom copies the file at the given path, extracts the file body from the tar archive and returns it's bytes.
@@ -270,4 +297,14 @@ type ContainerNotFoundError struct {
 
 func (e *ContainerNotFoundError) Error() string {
 	return fmt.Sprintf("container with name '%s' not found.", e.Name)
+}
+
+// NotACraftContainerError reports the instance where a container is found with a given name but lacks the label
+// indicating that it is managed using craft.
+type NotACraftContainerError struct {
+	Name string
+}
+
+func (e *NotACraftContainerError) Error() string {
+	return fmt.Sprintf("container found with name '%s' but it does not appear to be a craft server.", e.Name)
 }

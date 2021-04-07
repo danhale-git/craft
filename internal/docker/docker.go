@@ -1,27 +1,113 @@
 package docker
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"fmt"
-	"log"
+	"os"
 	"strconv"
 	"strings"
 
+	"github.com/moby/term"
+
+	"github.com/docker/docker/pkg/jsonmessage"
+
+	"github.com/danhale-git/craft/internal/logger"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
+
+	_ "embed"
 
 	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 )
 
+const craftLabel = "danhale-git/craft"
+
 // Client creates a default docker client.
 func Client() *client.Client {
 	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		log.Fatalf("Error: Failed to create new docker client: %s", err)
+		logger.Error.Fatalf("Error: Failed to create new docker client: %s", err)
 	}
 
 	return c
+}
+
+//go:embed Dockerfile
+var dockerfile []byte
+
+// BuildImage builds the server image.
+func BuildImage() error {
+	c := Client()
+
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+
+	// Tar embedded dockerfile
+	hdr := &tar.Header{
+		Name: "Dockerfile",
+		Size: int64(len(dockerfile)),
+	}
+	if err := tw.WriteHeader(hdr); err != nil {
+		return fmt.Errorf("writing header: %s", err)
+	}
+
+	if _, err := tw.Write(dockerfile); err != nil {
+		return fmt.Errorf("writing body: %s", err)
+	}
+
+	if err := tw.Close(); err != nil {
+		return err
+	}
+
+	// Build image
+	response, err := c.ImageBuild(
+		context.Background(),
+		&buf,
+		docker.ImageBuildOptions{
+			Dockerfile: "Dockerfile",
+			Tags:       []string{imageName},
+		},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	// Output from build process
+	termFd, isTerm := term.GetFdInfo(os.Stderr)
+	err = jsonmessage.DisplayJSONMessagesStream(
+		response.Body,
+		os.Stderr,
+		termFd,
+		isTerm,
+		nil,
+	)
+	if err != nil {
+		return err
+	}
+
+	return response.Body.Close()
+}
+
+// CheckImage returns true if the craft server image exists.
+func CheckImage() (bool, error) {
+	c := Client()
+
+	images, err := c.ImageList(context.Background(), docker.ImageListOptions{})
+	if err != nil {
+		return false, err
+	}
+
+	for _, img := range images {
+		if len(img.RepoTags) > 0 && img.RepoTags[0] == imageName {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }
 
 // RunContainer creates a new craft server container and returns a docker client for it.
@@ -35,7 +121,7 @@ func RunContainer(hostPort int, name string) (*Container, error) {
 
 	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		log.Fatalf("Error: Failed to create new docker client: %s", err)
+		logger.Error.Fatalf("Error: Failed to create new docker client: %s", err)
 	}
 
 	ctx := context.Background()
@@ -67,6 +153,9 @@ func RunContainer(hostPort int, name string) (*Container, error) {
 			AttachStderr: true,
 			Tty:          true,
 			OpenStdin:    true,
+			Labels: map[string]string{
+				craftLabel: "",
+			},
 		},
 		&container.HostConfig{
 			PortBindings: portBinding,
@@ -170,15 +259,19 @@ func ActiveServerClients() ([]*Container, error) {
 		return nil, fmt.Errorf("getting server names: %s", err)
 	}
 
-	clients := make([]*Container, len(names))
+	clients := make([]*Container, 0)
 
-	for i, n := range names {
-		c, err := NewContainer(n)
+	for _, n := range names {
+		c, err := GetContainer(n)
 		if err != nil {
+			if _, ok := err.(*NotACraftContainerError); ok {
+				continue
+			}
+
 			return nil, fmt.Errorf("creating client for container '%s': %s", n, err)
 		}
 
-		clients[i] = c
+		clients = append(clients, c)
 	}
 
 	return clients, nil
