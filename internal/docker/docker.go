@@ -137,7 +137,7 @@ func CheckImage() (bool, error) {
 // RunContainer creates a new craft server container and returns a docker client for it.
 // It is the equivalent of the following docker command:
 //
-//    docker run -d -e EULA=TRUE -p <HOST_PORT>:19132/udp <IMAGE_NAME>
+//    docker run -d -e EULA=TRUE -p <HOST_PORT>:19132/udp <imageName>
 func RunContainer(hostPort int, name string) (*Container, error) {
 	if hostPort == 0 {
 		hostPort = nextAvailablePort()
@@ -150,12 +150,12 @@ func RunContainer(hostPort int, name string) (*Container, error) {
 
 	ctx := context.Background()
 
-	// Create port binding between host ip:port and container port
 	hostBinding := nat.PortBinding{
 		HostIP:   anyIP,
 		HostPort: strconv.Itoa(hostPort),
 	}
 
+	// -p <HOST_PORT>:19132/udp
 	containerPort, err := nat.NewPort(protocol, strconv.Itoa(defaultPort))
 	if err != nil {
 		return nil, fmt.Errorf("creating container port: %s", err)
@@ -163,7 +163,7 @@ func RunContainer(hostPort int, name string) (*Container, error) {
 
 	portBinding := nat.PortMap{containerPort: []nat.PortBinding{hostBinding}}
 
-	// Request creation of container
+	// docker run -d -e EULA=TRUE
 	createResp, err := c.ContainerCreate(
 		ctx,
 		&container.Config{
@@ -191,7 +191,6 @@ func RunContainer(hostPort int, name string) (*Container, error) {
 		return nil, fmt.Errorf("creating docker container: %s", err)
 	}
 
-	// Start the container
 	err = c.ContainerStart(ctx, createResp.ID, docker.ContainerStartOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("starting container: %s", err)
@@ -206,7 +205,6 @@ func RunContainer(hostPort int, name string) (*Container, error) {
 	return &d, nil
 }
 
-// ContainerFromName returns the ID of the container with the given name or an error if that container doesn't exist.
 func containerID(name string, client client.ContainerAPIClient) (string, error) {
 	containers, err := client.ContainerList(context.Background(), docker.ContainerListOptions{})
 	if err != nil {

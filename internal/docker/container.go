@@ -30,7 +30,7 @@ const (
 	stopTimeout = 10
 )
 
-// Container is a docker client which operates on an existing container.
+// Container is a wrapper for docker's client.ContainerAPIClient which operates on a specific container.
 type Container struct {
 	client.ContainerAPIClient
 	ContainerName, containerID string
@@ -103,6 +103,7 @@ func (c *Container) IsCraftServer() (bool, error) {
 }
 
 // CopyFileFrom copies the file at the given path, extracts the file body from the tar archive and returns it's bytes.
+// Only one file will be read so the path should be to a file not a directory.
 func (c *Container) CopyFileFrom(containerPath string) ([]byte, error) {
 	tr, err := c.CopyFrom(containerPath)
 	if err != nil {
@@ -140,7 +141,7 @@ func (c *Container) CopyFrom(containerPath string) (*tar.Reader, error) {
 	return tar.NewReader(data), nil
 }
 
-// CopyFileTo archives the given bytes as a tar containing one file and copies that file to the destination path.
+// CopyFileTo archives the given bytes as a tar and copies that file to the destination path.
 func (c *Container) CopyFileTo(containerPath string, body []byte) error {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
@@ -176,9 +177,8 @@ func (c *Container) CopyTo(destPath string, tar *bytes.Buffer) error {
 	return nil
 }
 
-// Command runs the given arguments separated by spaces as a command in the bedrock_server process cli.
+// Command attaches to the container and runs the given arguments separated by spaces.
 func (c *Container) Command(args []string) error {
-	// Attach to the container
 	waiter, err := c.ContainerAttach(
 		context.Background(),
 		c.containerID,
@@ -194,10 +194,7 @@ func (c *Container) Command(args []string) error {
 
 	commandString := strings.Join(args, " ") + "\n"
 
-	// Write the command to the bedrock_server process cli
-	_, err = waiter.Conn.Write([]byte(
-		commandString,
-	))
+	_, err = waiter.Conn.Write([]byte(commandString))
 	if err != nil {
 		return err
 	}
@@ -205,9 +202,8 @@ func (c *Container) Command(args []string) error {
 	return nil
 }
 
-// CommandWriter returns a *net.Conn which streams to the mc server process stdin.
+// CommandWriter returns a *net.Conn which streams to the container process stdin.
 func (c *Container) CommandWriter() (net.Conn, error) {
-	// Attach to the container
 	waiter, err := c.ContainerAttach(
 		context.Background(),
 		c.containerID,
