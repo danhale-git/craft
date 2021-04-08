@@ -25,8 +25,7 @@ import (
 
 const craftLabel = "danhale-git/craft"
 
-// Client creates a default docker client.
-func Client() *client.Client {
+func newClient() *client.Client {
 	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		logger.Error.Fatalf("Error: Failed to create new docker client: %s", err)
@@ -35,12 +34,37 @@ func Client() *client.Client {
 	return c
 }
 
+// ServerClients returns a Container for each active server.
+func ServerClients() ([]*Container, error) {
+	names, err := containerNames()
+	if err != nil {
+		return nil, fmt.Errorf("getting server names: %s", err)
+	}
+
+	clients := make([]*Container, 0)
+
+	for _, n := range names {
+		c, err := GetContainer(n)
+		if err != nil {
+			if _, ok := err.(*NotACraftContainerError); ok {
+				continue
+			}
+
+			return nil, fmt.Errorf("creating client for container '%s': %s", n, err)
+		}
+
+		clients = append(clients, c)
+	}
+
+	return clients, nil
+}
+
 //go:embed Dockerfile
 var dockerfile []byte
 
 // BuildImage builds the server image.
 func BuildImage() error {
-	c := Client()
+	c := newClient()
 
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
@@ -94,7 +118,7 @@ func BuildImage() error {
 
 // CheckImage returns true if the craft server image exists.
 func CheckImage() (bool, error) {
-	c := Client()
+	c := newClient()
 
 	images, err := c.ImageList(context.Background(), docker.ImageListOptions{})
 	if err != nil {
@@ -183,7 +207,7 @@ func RunContainer(hostPort int, name string) (*Container, error) {
 }
 
 // ContainerFromName returns the ID of the container with the given name or an error if that container doesn't exist.
-func ContainerID(name string, client client.ContainerAPIClient) (string, error) {
+func containerID(name string, client client.ContainerAPIClient) (string, error) {
 	containers, err := client.ContainerList(context.Background(), docker.ContainerListOptions{})
 	if err != nil {
 		return "", fmt.Errorf("listing all containers: %s", err)
@@ -198,9 +222,9 @@ func ContainerID(name string, client client.ContainerAPIClient) (string, error) 
 	return "", &ContainerNotFoundError{Name: name}
 }
 
-// ContainerNames returns a slice containing the names of all running containers.
-func ContainerNames() ([]string, error) {
-	containers, err := Client().ContainerList(
+// containerNames returns a slice containing the names of all running containers.
+func containerNames() ([]string, error) {
+	containers, err := newClient().ContainerList(
 		context.Background(),
 		docker.ContainerListOptions{},
 	)
@@ -219,7 +243,7 @@ func ContainerNames() ([]string, error) {
 // nextAvailablePort returns the next available port, starting with the default mc port. It checks the first exposed
 // port of all running containers to determine if a port is in use.
 func nextAvailablePort() int {
-	clients, err := ActiveServerClients()
+	clients, err := ServerClients()
 	if err != nil {
 		panic(err)
 	}
@@ -250,29 +274,4 @@ OUTER:
 	}
 
 	panic("100 ports were not available")
-}
-
-// ActiveServerClients returns a Container for each active server.
-func ActiveServerClients() ([]*Container, error) {
-	names, err := ContainerNames()
-	if err != nil {
-		return nil, fmt.Errorf("getting server names: %s", err)
-	}
-
-	clients := make([]*Container, 0)
-
-	for _, n := range names {
-		c, err := GetContainer(n)
-		if err != nil {
-			if _, ok := err.(*NotACraftContainerError); ok {
-				continue
-			}
-
-			return nil, fmt.Errorf("creating client for container '%s': %s", n, err)
-		}
-
-		clients = append(clients, c)
-	}
-
-	return clients, nil
 }

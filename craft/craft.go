@@ -188,7 +188,7 @@ func SetServerProperties(propFlags []string, c *docker.Container) error {
 func PrintServers(all bool) error {
 	w := tabwriter.NewWriter(os.Stdout, 3, 3, 3, ' ', tabwriter.TabIndent)
 
-	servers, err := docker.ActiveServerClients()
+	servers, err := docker.ServerClients()
 	if err != nil {
 		return fmt.Errorf("getting server clients: %s", err)
 	}

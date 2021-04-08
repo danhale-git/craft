@@ -66,7 +66,7 @@ func GetContainer(containerName string) (*Container, error) {
 		logger.Error.Fatalf("Error: Failed to create new docker client: %s", err)
 	}
 
-	id, err := ContainerID(containerName, c)
+	id, err := containerID(containerName, c)
 	if err != nil {
 		return nil, err
 	}
@@ -91,8 +91,8 @@ func GetContainer(containerName string) (*Container, error) {
 
 // IsCraftServer returns true if the container has a label with a key matching craftLabel. Craft containers are given
 // this label on creation.
-func (d *Container) IsCraftServer() (bool, error) {
-	containerJSON, err := d.ContainerInspect(context.Background(), d.containerID)
+func (c *Container) IsCraftServer() (bool, error) {
+	containerJSON, err := c.ContainerInspect(context.Background(), c.containerID)
 	if err != nil {
 		return false, fmt.Errorf("inspecting container: %s", err)
 	}
@@ -103,8 +103,8 @@ func (d *Container) IsCraftServer() (bool, error) {
 }
 
 // CopyFileFrom copies the file at the given path, extracts the file body from the tar archive and returns it's bytes.
-func (d *Container) CopyFileFrom(containerPath string) ([]byte, error) {
-	tr, err := d.CopyFrom(containerPath)
+func (c *Container) CopyFileFrom(containerPath string) ([]byte, error) {
+	tr, err := c.CopyFrom(containerPath)
 	if err != nil {
 		return nil, err
 	}
@@ -127,10 +127,10 @@ func (d *Container) CopyFileFrom(containerPath string) ([]byte, error) {
 }
 
 // CopyFrom returns a tar archive containing the file(s) at the given container path.
-func (d *Container) CopyFrom(containerPath string) (*tar.Reader, error) {
-	data, _, err := d.CopyFromContainer(
+func (c *Container) CopyFrom(containerPath string) (*tar.Reader, error) {
+	data, _, err := c.CopyFromContainer(
 		context.Background(),
-		d.containerID,
+		c.containerID,
 		containerPath,
 	)
 	if err != nil {
@@ -141,7 +141,7 @@ func (d *Container) CopyFrom(containerPath string) (*tar.Reader, error) {
 }
 
 // CopyFileTo archives the given bytes as a tar containing one file and copies that file to the destination path.
-func (d *Container) CopyFileTo(containerPath string, body []byte) error {
+func (c *Container) CopyFileTo(containerPath string, body []byte) error {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 
@@ -157,14 +157,14 @@ func (d *Container) CopyFileTo(containerPath string, body []byte) error {
 		return fmt.Errorf("writing body: %s", err)
 	}
 
-	return d.CopyTo(filepath.Dir(containerPath), &buf)
+	return c.CopyTo(filepath.Dir(containerPath), &buf)
 }
 
 // CopyTo copies the given tar data to the destination path in the container.
-func (d *Container) CopyTo(destPath string, tar *bytes.Buffer) error {
-	err := d.CopyToContainer(
+func (c *Container) CopyTo(destPath string, tar *bytes.Buffer) error {
+	err := c.CopyToContainer(
 		context.Background(),
-		d.containerID,
+		c.containerID,
 		destPath,
 		tar,
 		docker.CopyToContainerOptions{},
@@ -177,11 +177,11 @@ func (d *Container) CopyTo(destPath string, tar *bytes.Buffer) error {
 }
 
 // Command runs the given arguments separated by spaces as a command in the bedrock_server process cli.
-func (d *Container) Command(args []string) error {
+func (c *Container) Command(args []string) error {
 	// Attach to the container
-	waiter, err := d.ContainerAttach(
+	waiter, err := c.ContainerAttach(
 		context.Background(),
-		d.containerID,
+		c.containerID,
 		docker.ContainerAttachOptions{
 			Stdin:  true,
 			Stream: true,
@@ -206,11 +206,11 @@ func (d *Container) Command(args []string) error {
 }
 
 // CommandWriter returns a *net.Conn which streams to the mc server process stdin.
-func (d *Container) CommandWriter() (net.Conn, error) {
+func (c *Container) CommandWriter() (net.Conn, error) {
 	// Attach to the container
-	waiter, err := d.ContainerAttach(
+	waiter, err := c.ContainerAttach(
 		context.Background(),
-		d.containerID,
+		c.containerID,
 		docker.ContainerAttachOptions{
 			Stdin:  true,
 			Stream: true,
@@ -224,22 +224,22 @@ func (d *Container) CommandWriter() (net.Conn, error) {
 }
 
 // Stop stops the docker container.
-func (d *Container) Stop() error {
+func (c *Container) Stop() error {
 	timeout := time.Duration(stopTimeout)
 
-	return d.ContainerStop(
+	return c.ContainerStop(
 		context.Background(),
-		d.containerID,
+		c.containerID,
 		&timeout,
 	)
 }
 
 // LogReader returns a buffer with the stdout and stderr from the running mc server process. New output will continually
 // be sent to the buffer. A negative tail value will result in the 'all' value being used.
-func (d *Container) LogReader(tail int) (*bufio.Reader, error) {
-	logs, err := d.ContainerLogs(
+func (c *Container) LogReader(tail int) (*bufio.Reader, error) {
+	logs, err := c.ContainerLogs(
 		context.Background(),
-		d.containerID,
+		c.containerID,
 		docker.ContainerLogsOptions{
 			ShowStdout: true,
 			ShowStderr: true,
@@ -256,16 +256,16 @@ func (d *Container) LogReader(tail int) (*bufio.Reader, error) {
 }
 
 // GetPort returns the port players use to connect to this server
-func (d *Container) GetPort() (int, error) {
-	c, err := d.ContainerInspect(context.Background(), d.containerID)
+func (c *Container) GetPort() (int, error) {
+	cj, err := c.ContainerInspect(context.Background(), c.containerID)
 	if err != nil {
 		return 0, err
 	}
 
-	portBindings := c.HostConfig.PortBindings
+	portBindings := cj.HostConfig.PortBindings
 
 	if len(portBindings) == 0 {
-		return 0, fmt.Errorf("no ports bound for container %s", d.ContainerName)
+		return 0, fmt.Errorf("no ports bound for container %s", c.ContainerName)
 	}
 
 	var port int
@@ -286,8 +286,8 @@ func (d *Container) GetPort() (int, error) {
 	return port, nil
 }
 
-func (d *Container) Stat(path string) (docker.ContainerPathStat, error) {
-	return d.ContainerStatPath(context.Background(), d.containerID, path)
+func (c *Container) Stat(path string) (docker.ContainerPathStat, error) {
+	return c.ContainerStatPath(context.Background(), c.containerID, path)
 }
 
 // ContainerNotFoundError tells the caller that no containers were found with the given name.
