@@ -17,7 +17,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
 
-	_ "embed"
+	_ "embed" // use embed package in this script
 
 	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
@@ -60,7 +60,7 @@ func ServerClients() ([]*Container, error) {
 }
 
 //go:embed Dockerfile
-var dockerfile []byte
+var dockerfile []byte //nolint:gochecknoglobals // embed needs a global
 
 // BuildImage builds the server image.
 func BuildImage() error {
@@ -102,6 +102,7 @@ func BuildImage() error {
 
 	// Output from build process
 	termFd, isTerm := term.GetFdInfo(os.Stderr)
+
 	err = jsonmessage.DisplayJSONMessagesStream(
 		response.Body,
 		os.Stderr,
@@ -167,19 +168,13 @@ func RunContainer(hostPort int, name string) (*Container, error) {
 	createResp, err := c.ContainerCreate(
 		ctx,
 		&container.Config{
-			Image: imageName,
-			Env:   []string{"EULA=TRUE"},
-			ExposedPorts: nat.PortSet{
-				containerPort: struct{}{},
-			},
-			AttachStdin:  true,
-			AttachStdout: true,
-			AttachStderr: true,
-			Tty:          true,
-			OpenStdin:    true,
-			Labels: map[string]string{
-				craftLabel: "",
-			},
+			Image:        imageName,
+			Env:          []string{"EULA=TRUE"},
+			ExposedPorts: nat.PortSet{containerPort: struct{}{}},
+			AttachStdin:  true, AttachStdout: true, AttachStderr: true,
+			Tty:       true,
+			OpenStdin: true,
+			Labels:    map[string]string{craftLabel: ""},
 		},
 		&container.HostConfig{
 			PortBindings: portBinding,

@@ -15,8 +15,6 @@ import (
 	"strings"
 	"time"
 
-	_ "embed"
-
 	"github.com/danhale-git/craft/internal/logger"
 	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
