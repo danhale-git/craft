@@ -59,45 +59,34 @@ func GetContainerOrExit(containerName string) *Container {
 // GetContainer returns a new default docker container API client for an existing container. If the given container name
 // doesn't exist an error of type ContainerNotFoundError is returned.
 func GetContainer(containerName string) (*Container, error) {
-	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	cl, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		logger.Error.Fatalf("Error: Failed to create new docker client: %s", err)
 	}
 
-	id, err := containerID(containerName, c)
+	id, err := containerID(containerName, cl)
 	if err != nil {
 		return nil, err
 	}
 
-	d := Container{
-		ContainerAPIClient: c,
+	c := Container{
+		ContainerAPIClient: cl,
 		ContainerName:      containerName,
 		containerID:        id,
 	}
 
-	ok, err := d.IsCraftServer()
+	containerJSON, err := cl.ContainerInspect(context.Background(), c.containerID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("inspecting container: %s", err)
 	}
+
+	_, ok := containerJSON.Config.Labels[craftLabel]
 
 	if !ok {
 		return nil, &NotACraftContainerError{Name: containerName}
 	}
 
-	return &d, nil
-}
-
-// IsCraftServer returns true if the container has a label with a key matching craftLabel. Craft containers are given
-// this label on creation.
-func (c *Container) IsCraftServer() (bool, error) {
-	containerJSON, err := c.ContainerInspect(context.Background(), c.containerID)
-	if err != nil {
-		return false, fmt.Errorf("inspecting container: %s", err)
-	}
-
-	_, ok := containerJSON.Config.Labels[craftLabel]
-
-	return ok, nil
+	return &c, nil
 }
 
 // CopyFileFrom copies the file at the given path, extracts the file body from the tar archive and returns it's bytes.
