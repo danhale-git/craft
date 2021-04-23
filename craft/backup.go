@@ -21,7 +21,7 @@ import (
 
 	"github.com/danhale-git/craft/internal/backup"
 
-	"github.com/danhale-git/craft/internal/docker"
+	"github.com/danhale-git/craft/internal/dockerwrapper"
 )
 
 const (
@@ -38,7 +38,7 @@ func serverFiles() []string {
 }
 
 // CopyBackup saves a backup to the default local directory.
-func CopyBackup(c *docker.Container) (string, error) {
+func CopyBackup(c *dockerwrapper.Container) (string, error) {
 	backupPath := filepath.Join(backupDirectory(), c.ContainerName)
 	fileName := fmt.Sprintf("%s_%s.zip", c.ContainerName, time.Now().Format(backup.FileNameTimeLayout))
 	backupFilePath := path.Join(backupPath, fileName)
@@ -103,7 +103,7 @@ func CopyBackup(c *docker.Container) (string, error) {
 }
 
 // Exports the server's current world to the given destination directory.
-func ExportMCWorld(c *docker.Container, dest string) error {
+func ExportMCWorld(c *dockerwrapper.Container, dest string) error {
 	if dest == "" {
 		dest = backupDirectory()
 	}
@@ -174,7 +174,7 @@ cmd <server> save resume')`)
 	return nil
 }
 
-func copyFiles(c *docker.Container, f io.Writer, containerPrefix string, paths []string) error {
+func copyFiles(c *dockerwrapper.Container, f io.Writer, containerPrefix string, paths []string) error {
 	// Write zip data to out file
 	zw := zip.NewWriter(f)
 
@@ -323,7 +323,7 @@ func backupDirectory() string {
 	return backupDir
 }
 
-func restoreBackup(d *docker.Container, backupName string) error {
+func restoreBackup(d *dockerwrapper.Container, backupName string) error {
 	backupPath := filepath.Join(backupDirectory(), d.ContainerName)
 
 	// Open backup zip

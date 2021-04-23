@@ -4,7 +4,7 @@ import (
 	"strings"
 
 	"github.com/danhale-git/craft/craft"
-	"github.com/danhale-git/craft/internal/docker"
+	"github.com/danhale-git/craft/internal/dockerwrapper"
 	"github.com/danhale-git/craft/internal/logger"
 	"github.com/spf13/cobra"
 )
@@ -64,7 +64,7 @@ func backupCommand(cmd *cobra.Command, args []string) {
 	deleted := make([]string, 0)
 
 	for _, name := range args {
-		c := docker.GetContainerOrExit(name)
+		c := dockerwrapper.GetContainerOrExit(name)
 
 		// Take a new backup
 		name, err := craft.CopyBackup(c)
