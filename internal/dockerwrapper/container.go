@@ -1,14 +1,12 @@
 package dockerwrapper
 
 import (
-	"archive/tar"
 	"bufio"
 	"bytes"
 	"context"
 	"fmt"
 	"net"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -85,26 +83,6 @@ func GetContainer(containerName string) (*Container, error) {
 	}
 
 	return &c, nil
-}
-
-// CopyFileTo archives the given bytes as a tar and copies that file to the destination path.
-func (c *Container) CopyFileTo(containerPath string, body []byte) error {
-	var buf bytes.Buffer
-	tw := tar.NewWriter(&buf)
-
-	hdr := &tar.Header{
-		Name: filepath.Base(containerPath),
-		Size: int64(len(body)),
-	}
-	if err := tw.WriteHeader(hdr); err != nil {
-		return fmt.Errorf("writing header: %s", err)
-	}
-
-	if _, err := tw.Write(body); err != nil {
-		return fmt.Errorf("writing body: %s", err)
-	}
-
-	return c.CopyTo(filepath.Dir(containerPath), &buf)
 }
 
 // CopyTo copies the given tar data to the destination path in the container.
@@ -226,10 +204,6 @@ func (c *Container) GetPort() (int, error) {
 	}
 
 	return port, nil
-}
-
-func (c *Container) Stat(path string) (docker.ContainerPathStat, error) {
-	return c.ContainerStatPath(context.Background(), c.ContainerID, path)
 }
 
 // ContainerNotFoundError tells the caller that no containers were found with the given name.

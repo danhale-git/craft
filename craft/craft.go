@@ -3,11 +3,13 @@ package craft
 import (
 	"archive/tar"
 	"bufio"
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"strings"
 	"text/tabwriter"
 
@@ -196,14 +198,27 @@ func SetServerProperties(propFlags []string, c *dockerwrapper.Container) error {
 			return err
 		}
 
-		updated, err := configure.SetProperties(k, v, b)
+		b, err = configure.SetProperties(k, v, b)
 		if err != nil {
 			return err
 		}
 
-		if err = c.CopyFileTo(server.FullPaths.ServerProperties, updated); err != nil {
-			return err
+		var buf bytes.Buffer
+		tw := tar.NewWriter(&buf)
+
+		hdr := &tar.Header{
+			Name: filepath.Base(containerPath),
+			Size: int64(len(b)),
 		}
+		if err := tw.WriteHeader(hdr); err != nil {
+			return fmt.Errorf("writing header: %s", err)
+		}
+
+		if _, err := tw.Write(b); err != nil {
+			return fmt.Errorf("writing body: %s", err)
+		}
+
+		return c.CopyTo(filepath.Dir(containerPath), &buf)
 	}
 
 	return nil
