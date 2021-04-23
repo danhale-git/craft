@@ -194,7 +194,7 @@ func RunContainer(hostPort int, name string) (*Container, error) {
 	d := Container{
 		ContainerAPIClient: c,
 		ContainerName:      name,
-		containerID:        createResp.ID,
+		ContainerID:        createResp.ID,
 	}
 
 	return &d, nil

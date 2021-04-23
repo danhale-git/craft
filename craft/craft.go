@@ -1,8 +1,12 @@
 package craft
 
 import (
+	"archive/tar"
 	"bufio"
+	"context"
 	"fmt"
+	"io"
+	"io/ioutil"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -165,7 +169,29 @@ func SetServerProperties(propFlags []string, c *dockerwrapper.Container) error {
 			v[i] = s[1]
 		}
 
-		b, err := c.CopyFileFrom(server.FullPaths.ServerProperties)
+		containerPath := server.FullPaths.ServerProperties
+
+		data, _, err := c.CopyFromContainer(
+			context.Background(),
+			c.ContainerID,
+			containerPath,
+		)
+		if err != nil {
+			return fmt.Errorf("copying data from server at '%s': %s", containerPath, err)
+		}
+
+		tr := tar.NewReader(data)
+
+		_, err = tr.Next()
+		if err == io.EOF {
+			return fmt.Errorf("no file was found at '%s', got EOF reading tar archive", server.FullPaths.ServerProperties)
+		}
+
+		if err != nil {
+			return fmt.Errorf("reading tar archive: %s", err)
+		}
+
+		b, err := ioutil.ReadAll(tr)
 		if err != nil {
 			return err
 		}

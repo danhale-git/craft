@@ -6,8 +6,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"path/filepath"
@@ -31,7 +29,7 @@ const (
 // Container is a wrapper for docker's client.ContainerAPIClient which operates on a specific container.
 type Container struct {
 	client.ContainerAPIClient
-	ContainerName, containerID string
+	ContainerName, ContainerID string
 }
 
 // GetContainerOrExit is a convenience function for attempting to find an existing docker container with the given name.
@@ -72,10 +70,10 @@ func GetContainer(containerName string) (*Container, error) {
 	c := Container{
 		ContainerAPIClient: cl,
 		ContainerName:      containerName,
-		containerID:        id,
+		ContainerID:        id,
 	}
 
-	containerJSON, err := cl.ContainerInspect(context.Background(), c.containerID)
+	containerJSON, err := cl.ContainerInspect(context.Background(), c.ContainerID)
 	if err != nil {
 		return nil, fmt.Errorf("inspecting container: %s", err)
 	}
@@ -87,45 +85,6 @@ func GetContainer(containerName string) (*Container, error) {
 	}
 
 	return &c, nil
-}
-
-// CopyFileFrom copies the file at the given path, extracts the file body from the tar archive and returns it's bytes.
-// Only one file will be read so the path should be to a file not a directory.
-func (c *Container) CopyFileFrom(containerPath string) ([]byte, error) {
-	tr, err := c.CopyFrom(containerPath)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = tr.Next()
-	if err == io.EOF {
-		return nil, fmt.Errorf("no file was found at '%s', got EOF reading tar archive", containerPath)
-	}
-
-	if err != nil {
-		return nil, fmt.Errorf("reading tar archive: %s", err)
-	}
-
-	b, err := ioutil.ReadAll(tr)
-	if err != nil {
-		return nil, err
-	}
-
-	return b, nil
-}
-
-// CopyFrom returns a tar archive containing the file(s) at the given container path.
-func (c *Container) CopyFrom(containerPath string) (*tar.Reader, error) {
-	data, _, err := c.CopyFromContainer(
-		context.Background(),
-		c.containerID,
-		containerPath,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("copying data from server at '%s': %s", containerPath, err)
-	}
-
-	return tar.NewReader(data), nil
 }
 
 // CopyFileTo archives the given bytes as a tar and copies that file to the destination path.
@@ -152,7 +111,7 @@ func (c *Container) CopyFileTo(containerPath string, body []byte) error {
 func (c *Container) CopyTo(destPath string, tar *bytes.Buffer) error {
 	err := c.CopyToContainer(
 		context.Background(),
-		c.containerID,
+		c.ContainerID,
 		destPath,
 		tar,
 		docker.CopyToContainerOptions{},
@@ -168,7 +127,7 @@ func (c *Container) CopyTo(destPath string, tar *bytes.Buffer) error {
 func (c *Container) Command(args []string) error {
 	waiter, err := c.ContainerAttach(
 		context.Background(),
-		c.containerID,
+		c.ContainerID,
 		docker.ContainerAttachOptions{
 			Stdin:  true,
 			Stream: true,
@@ -193,7 +152,7 @@ func (c *Container) Command(args []string) error {
 func (c *Container) CommandWriter() (net.Conn, error) {
 	waiter, err := c.ContainerAttach(
 		context.Background(),
-		c.containerID,
+		c.ContainerID,
 		docker.ContainerAttachOptions{
 			Stdin:  true,
 			Stream: true,
@@ -212,7 +171,7 @@ func (c *Container) Stop() error {
 
 	return c.ContainerStop(
 		context.Background(),
-		c.containerID,
+		c.ContainerID,
 		&timeout,
 	)
 }
@@ -222,7 +181,7 @@ func (c *Container) Stop() error {
 func (c *Container) LogReader(tail int) (*bufio.Reader, error) {
 	logs, err := c.ContainerLogs(
 		context.Background(),
-		c.containerID,
+		c.ContainerID,
 		docker.ContainerLogsOptions{
 			ShowStdout: true,
 			ShowStderr: true,
@@ -240,7 +199,7 @@ func (c *Container) LogReader(tail int) (*bufio.Reader, error) {
 
 // GetPort returns the port players use to connect to this server
 func (c *Container) GetPort() (int, error) {
-	cj, err := c.ContainerInspect(context.Background(), c.containerID)
+	cj, err := c.ContainerInspect(context.Background(), c.ContainerID)
 	if err != nil {
 		return 0, err
 	}
@@ -270,7 +229,7 @@ func (c *Container) GetPort() (int, error) {
 }
 
 func (c *Container) Stat(path string) (docker.ContainerPathStat, error) {
-	return c.ContainerStatPath(context.Background(), c.containerID, path)
+	return c.ContainerStatPath(context.Background(), c.ContainerID, path)
 }
 
 // ContainerNotFoundError tells the caller that no containers were found with the given name.

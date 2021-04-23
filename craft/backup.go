@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -179,10 +180,18 @@ func copyFiles(c *dockerwrapper.Container, f io.Writer, containerPrefix string, 
 	zw := zip.NewWriter(f)
 
 	for _, p := range paths {
-		tr, err := c.CopyFrom(filepath.Join(containerPrefix, p))
+		containerPath := filepath.Join(containerPrefix, p)
+
+		data, _, err := c.CopyFromContainer(
+			context.Background(),
+			c.ContainerID,
+			containerPath,
+		)
 		if err != nil {
-			return err
+			return fmt.Errorf("copying data from server at '%s': %s", containerPath, err)
 		}
+
+		tr, err := tar.NewReader(data), nil
 
 		err = addTarToZip(p, tr, zw)
 		if err != nil {
