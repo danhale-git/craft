@@ -17,7 +17,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
 
-	_ "embed"
+	_ "embed" // use embed package in this script
 
 	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
@@ -25,8 +25,7 @@ import (
 
 const craftLabel = "danhale-git/craft"
 
-// Client creates a default docker client.
-func Client() *client.Client {
+func newClient() *client.Client {
 	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		logger.Error.Fatalf("Error: Failed to create new docker client: %s", err)
@@ -35,12 +34,37 @@ func Client() *client.Client {
 	return c
 }
 
+// ServerClients returns a Container for each active server.
+func ServerClients() ([]*Container, error) {
+	names, err := containerNames()
+	if err != nil {
+		return nil, fmt.Errorf("getting server names: %s", err)
+	}
+
+	clients := make([]*Container, 0)
+
+	for _, n := range names {
+		c, err := GetContainer(n)
+		if err != nil {
+			if _, ok := err.(*NotACraftContainerError); ok {
+				continue
+			}
+
+			return nil, fmt.Errorf("creating client for container '%s': %s", n, err)
+		}
+
+		clients = append(clients, c)
+	}
+
+	return clients, nil
+}
+
 //go:embed Dockerfile
-var dockerfile []byte
+var dockerfile []byte //nolint:gochecknoglobals // embed needs a global
 
 // BuildImage builds the server image.
 func BuildImage() error {
-	c := Client()
+	c := newClient()
 
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
@@ -78,6 +102,7 @@ func BuildImage() error {
 
 	// Output from build process
 	termFd, isTerm := term.GetFdInfo(os.Stderr)
+
 	err = jsonmessage.DisplayJSONMessagesStream(
 		response.Body,
 		os.Stderr,
@@ -94,7 +119,7 @@ func BuildImage() error {
 
 // CheckImage returns true if the craft server image exists.
 func CheckImage() (bool, error) {
-	c := Client()
+	c := newClient()
 
 	images, err := c.ImageList(context.Background(), docker.ImageListOptions{})
 	if err != nil {
@@ -113,7 +138,7 @@ func CheckImage() (bool, error) {
 // RunContainer creates a new craft server container and returns a docker client for it.
 // It is the equivalent of the following docker command:
 //
-//    docker run -d -e EULA=TRUE -p <HOST_PORT>:19132/udp <IMAGE_NAME>
+//    docker run -d -e EULA=TRUE -p <HOST_PORT>:19132/udp <imageName>
 func RunContainer(hostPort int, name string) (*Container, error) {
 	if hostPort == 0 {
 		hostPort = nextAvailablePort()
@@ -126,12 +151,12 @@ func RunContainer(hostPort int, name string) (*Container, error) {
 
 	ctx := context.Background()
 
-	// Create port binding between host ip:port and container port
 	hostBinding := nat.PortBinding{
 		HostIP:   anyIP,
 		HostPort: strconv.Itoa(hostPort),
 	}
 
+	// -p <HOST_PORT>:19132/udp
 	containerPort, err := nat.NewPort(protocol, strconv.Itoa(defaultPort))
 	if err != nil {
 		return nil, fmt.Errorf("creating container port: %s", err)
@@ -139,23 +164,17 @@ func RunContainer(hostPort int, name string) (*Container, error) {
 
 	portBinding := nat.PortMap{containerPort: []nat.PortBinding{hostBinding}}
 
-	// Request creation of container
+	// docker run -d -e EULA=TRUE
 	createResp, err := c.ContainerCreate(
 		ctx,
 		&container.Config{
-			Image: imageName,
-			Env:   []string{"EULA=TRUE"},
-			ExposedPorts: nat.PortSet{
-				containerPort: struct{}{},
-			},
-			AttachStdin:  true,
-			AttachStdout: true,
-			AttachStderr: true,
-			Tty:          true,
-			OpenStdin:    true,
-			Labels: map[string]string{
-				craftLabel: "",
-			},
+			Image:        imageName,
+			Env:          []string{"EULA=TRUE"},
+			ExposedPorts: nat.PortSet{containerPort: struct{}{}},
+			AttachStdin:  true, AttachStdout: true, AttachStderr: true,
+			Tty:       true,
+			OpenStdin: true,
+			Labels:    map[string]string{craftLabel: ""},
 		},
 		&container.HostConfig{
 			PortBindings: portBinding,
@@ -167,7 +186,6 @@ func RunContainer(hostPort int, name string) (*Container, error) {
 		return nil, fmt.Errorf("creating docker container: %s", err)
 	}
 
-	// Start the container
 	err = c.ContainerStart(ctx, createResp.ID, docker.ContainerStartOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("starting container: %s", err)
@@ -182,8 +200,7 @@ func RunContainer(hostPort int, name string) (*Container, error) {
 	return &d, nil
 }
 
-// ContainerFromName returns the ID of the container with the given name or an error if that container doesn't exist.
-func ContainerID(name string, client client.ContainerAPIClient) (string, error) {
+func containerID(name string, client client.ContainerAPIClient) (string, error) {
 	containers, err := client.ContainerList(context.Background(), docker.ContainerListOptions{})
 	if err != nil {
 		return "", fmt.Errorf("listing all containers: %s", err)
@@ -198,9 +215,9 @@ func ContainerID(name string, client client.ContainerAPIClient) (string, error) 
 	return "", &ContainerNotFoundError{Name: name}
 }
 
-// ContainerNames returns a slice containing the names of all running containers.
-func ContainerNames() ([]string, error) {
-	containers, err := Client().ContainerList(
+// containerNames returns a slice containing the names of all running containers.
+func containerNames() ([]string, error) {
+	containers, err := newClient().ContainerList(
 		context.Background(),
 		docker.ContainerListOptions{},
 	)
@@ -219,7 +236,7 @@ func ContainerNames() ([]string, error) {
 // nextAvailablePort returns the next available port, starting with the default mc port. It checks the first exposed
 // port of all running containers to determine if a port is in use.
 func nextAvailablePort() int {
-	clients, err := ActiveServerClients()
+	clients, err := ServerClients()
 	if err != nil {
 		panic(err)
 	}
@@ -250,29 +267,4 @@ OUTER:
 	}
 
 	panic("100 ports were not available")
-}
-
-// ActiveServerClients returns a Container for each active server.
-func ActiveServerClients() ([]*Container, error) {
-	names, err := ContainerNames()
-	if err != nil {
-		return nil, fmt.Errorf("getting server names: %s", err)
-	}
-
-	clients := make([]*Container, 0)
-
-	for _, n := range names {
-		c, err := GetContainer(n)
-		if err != nil {
-			if _, ok := err.(*NotACraftContainerError); ok {
-				continue
-			}
-
-			return nil, fmt.Errorf("creating client for container '%s': %s", n, err)
-		}
-
-		clients = append(clients, c)
-	}
-
-	return clients, nil
 }

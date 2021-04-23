@@ -180,7 +180,7 @@ func NewStartCmd() *cobra.Command {
 If no port flag is provided, the lowest available (unused by docker) port between 19132 and 19232 will be used.
 If multiple arguments are provided, the --port flag is ignored and ports are assigned automatically.`,
 		Args: func(cmd *cobra.Command, args []string) error {
-			return cobra.MinimumNArgs(1)(cmd, args)
+			return cobra.ExactArgs(1)(cmd, args)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			started := make([]string, 0)
@@ -224,24 +224,20 @@ func NewStopCmd() *cobra.Command {
 		Short: "Back up and stop a running server.",
 		Long:  `Back up the server then stop it. If the backup process fails, the server will not be stopped. `,
 		Args: func(cmd *cobra.Command, args []string) error {
-			return cobra.MinimumNArgs(1)(cmd, args)
+			return cobra.ExactArgs(1)(cmd, args)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			stopped := make([]string, 0)
+			c := docker.GetContainerOrExit(args[0])
 
-			for _, name := range args {
-				// TODO: Should skip here if ContainerNotFoundError, not exit
-				c := docker.GetContainerOrExit(name)
-				if _, err := craft.CopyBackup(c); err != nil {
-					logger.Error.Printf("%s: error while taking backup: %s", c.ContainerName, err)
-					continue
-				}
-
-				if err := craft.Stop(c); err != nil {
-					logger.Error.Printf("%s: stopping server: %s", c.ContainerName, err)
-				}
-				stopped = append(stopped, c.ContainerName)
+			if _, err := craft.CopyBackup(c); err != nil {
+				logger.Error.Fatalf("%s: error while taking backup: %s", c.ContainerName, err)
 			}
+
+			if err := craft.Stop(c); err != nil {
+				logger.Error.Fatalf("%s: stopping server: %s", c.ContainerName, err)
+			}
+			stopped = append(stopped, c.ContainerName)
 
 			logger.Info.Println("stopped:", strings.Join(stopped, " "))
 		},

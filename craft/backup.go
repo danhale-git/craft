@@ -162,7 +162,8 @@ func ExportMCWorld(c *docker.Container, dest string) error {
 	}
 
 	if err := backup.SaveResume(cmd, logs); err != nil {
-		logger.Error.Printf("error when running `save resume` (server may be in a bad state - try running 'craft cmd <server> save resume')")
+		logger.Error.Printf(`error when running save resume (server may be in a bad state - try running 'craft
+cmd <server> save resume')`)
 	}
 
 	mcWorld := MCWorld{Path: filePath}
