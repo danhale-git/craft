@@ -19,35 +19,8 @@ import (
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
-type (
-	ContainerLogsDockerClientMock struct {
-		*ContainerAPIDockerClientMock
-	}
-
-	ContainerListDockerClientMock struct {
-		*ContainerAPIDockerClientMock
-	}
-
-	ContainerAttachDockerClientMock struct {
-		*ContainerAPIDockerClientMock
-		Conn   net.Conn
-		Reader *bufio.Reader
-	}
-)
-
-//nolint:lll // mock method
-func (m *ContainerListDockerClientMock) ContainerList(_ context.Context, _ types.ContainerListOptions) ([]types.Container, error) {
-	containers := []types.Container{
-		{ID: "mc1_ID", Names: []string{"/mc1"}},
-		{ID: "mc2_ID", Names: []string{"/mc2"}},
-		{ID: "mc3_ID", Names: []string{"/mc3"}},
-	}
-
-	return containers, nil
-}
-
 func TestContainer_Command(t *testing.T) {
-	mockClient := &ContainerAttachDockerClientMock{}
+	mockClient := &ContainerAPIDockerClientMock{}
 	d := &Container{ContainerAPIClient: mockClient}
 	conn, reader := net.Pipe()
 	mockClient.Conn = conn
@@ -74,20 +47,8 @@ func TestContainer_Command(t *testing.T) {
 	}
 }
 
-//nolint:lll // mock method
-func (m *ContainerAttachDockerClientMock) ContainerAttach(_ context.Context, _ string, _ types.ContainerAttachOptions) (types.HijackedResponse, error) {
-	rw := types.HijackedResponse{
-		Conn:   m.Conn,
-		Reader: m.Reader,
-	}
-
-	fmt.Println("container attach returned")
-
-	return rw, nil
-}
-
 func TestContainer_LogReader(t *testing.T) {
-	d := &Container{ContainerAPIClient: &ContainerLogsDockerClientMock{}}
+	d := &Container{ContainerAPIClient: &ContainerAPIDockerClientMock{}}
 
 	r, err := d.LogReader(20)
 	if err != nil {
@@ -104,8 +65,25 @@ func TestContainer_LogReader(t *testing.T) {
 	}
 }
 
+type ContainerAPIDockerClientMock struct {
+	Conn   net.Conn
+	Reader *bufio.Reader
+}
+
 //nolint:lll // mock method
-func (mlr *ContainerLogsDockerClientMock) ContainerLogs(_ context.Context, _ string, _ types.ContainerLogsOptions) (io.ReadCloser, error) {
+func (m *ContainerAPIDockerClientMock) ContainerAttach(_ context.Context, _ string, _ types.ContainerAttachOptions) (types.HijackedResponse, error) {
+	rw := types.HijackedResponse{
+		Conn:   m.Conn,
+		Reader: m.Reader,
+	}
+
+	fmt.Println("container attach returned")
+
+	return rw, nil
+}
+
+//nolint:lll // mock method
+func (m *ContainerAPIDockerClientMock) ContainerLogs(_ context.Context, _ string, _ types.ContainerLogsOptions) (io.ReadCloser, error) {
 	r := ioutil.NopCloser(bytes.NewReader([]byte(`NO LOG FILE! - setting up server logging...
 [2020-12-22 20:24:38 INFO] Starting Server
 [2020-12-22 20:24:38 INFO] Version 1.16.200.2
@@ -123,11 +101,15 @@ func (mlr *ContainerLogsDockerClientMock) ContainerLogs(_ context.Context, _ str
 	return r, nil
 }
 
-type ContainerAPIDockerClientMock struct{}
-
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerAttach(_ context.Context, _ string, _ types.ContainerAttachOptions) (types.HijackedResponse, error) {
-	panic("not implemented!")
+func (m *ContainerAPIDockerClientMock) ContainerList(_ context.Context, _ types.ContainerListOptions) ([]types.Container, error) {
+	containers := []types.Container{
+		{ID: "mc1_ID", Names: []string{"/mc1"}},
+		{ID: "mc2_ID", Names: []string{"/mc2"}},
+		{ID: "mc3_ID", Names: []string{"/mc3"}},
+	}
+
+	return containers, nil
 }
 
 //nolint:lll // mock method
@@ -187,16 +169,6 @@ func (m *ContainerAPIDockerClientMock) ContainerInspectWithRaw(_ context.Context
 
 //nolint:lll // mock method
 func (m *ContainerAPIDockerClientMock) ContainerKill(_ context.Context, _ string, _ string) error {
-	panic("not implemented!")
-}
-
-//nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerList(_ context.Context, _ types.ContainerListOptions) ([]types.Container, error) {
-	panic("not implemented!")
-}
-
-//nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerLogs(_ context.Context, _ string, _ types.ContainerLogsOptions) (io.ReadCloser, error) {
 	panic("not implemented!")
 }
 

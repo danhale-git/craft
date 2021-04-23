@@ -6,7 +6,7 @@ import (
 )
 
 func TestContainerID(t *testing.T) {
-	d := &Container{ContainerAPIClient: &ContainerListDockerClientMock{}}
+	d := &Container{ContainerAPIClient: &ContainerAPIDockerClientMock{}}
 
 	for i := 1; i <= 3; i++ {
 		want := fmt.Sprintf("mc%d_ID", i)

@@ -21,7 +21,7 @@ const (
 	defaultPort = 19132                          // Default port for player connections
 	protocol    = "UDP"                          // MC uses UDP
 	imageName   = "danhaledocker/craftmine:v1.9" // The name of the docker image to use
-	stopTimeout = 10
+	stopTimeout = 30
 )
 
 // Container is a wrapper for docker's client.ContainerAPIClient which operates on a specific container.
@@ -103,22 +103,14 @@ func (c *Container) CopyTo(destPath string, tar *bytes.Buffer) error {
 
 // Command attaches to the container and runs the given arguments separated by spaces.
 func (c *Container) Command(args []string) error {
-	waiter, err := c.ContainerAttach(
-		context.Background(),
-		c.ContainerID,
-		docker.ContainerAttachOptions{
-			Stdin:  true,
-			Stream: true,
-		},
-	)
-
+	conn, err := c.CommandWriter()
 	if err != nil {
 		return err
 	}
 
 	commandString := strings.Join(args, " ") + "\n"
 
-	_, err = waiter.Conn.Write([]byte(commandString))
+	_, err = conn.Write([]byte(commandString))
 	if err != nil {
 		return err
 	}
@@ -145,6 +137,8 @@ func (c *Container) CommandWriter() (net.Conn, error) {
 
 // Stop stops the docker container.
 func (c *Container) Stop() error {
+	logger.Info.Printf("stopping %s\n", c.ContainerName)
+
 	timeout := time.Duration(stopTimeout)
 
 	return c.ContainerStop(
