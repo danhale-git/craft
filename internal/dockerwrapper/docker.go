@@ -35,16 +35,16 @@ func newClient() *client.Client {
 }
 
 // ServerClients returns a Container for each active server.
-func ServerClients() ([]*Container, error) {
+func ServerClients() ([]*Server, error) {
 	names, err := containerNames()
 	if err != nil {
 		return nil, fmt.Errorf("getting server names: %s", err)
 	}
 
-	clients := make([]*Container, 0)
+	clients := make([]*Server, 0)
 
 	for _, n := range names {
-		c, err := GetContainer(n)
+		c, err := New(n)
 		if err != nil {
 			if _, ok := err.(*NotACraftContainerError); ok {
 				continue
@@ -139,7 +139,7 @@ func CheckImage() (bool, error) {
 // It is the equivalent of the following docker command:
 //
 //    docker run -d -e EULA=TRUE -p <HOST_PORT>:19132/udp <imageName>
-func RunContainer(hostPort int, name string) (*Container, error) {
+func RunContainer(hostPort int, name string) (*Server, error) {
 	if hostPort == 0 {
 		hostPort = nextAvailablePort()
 	}
@@ -191,7 +191,7 @@ func RunContainer(hostPort int, name string) (*Container, error) {
 		return nil, fmt.Errorf("starting container: %s", err)
 	}
 
-	d := Container{
+	d := Server{
 		ContainerAPIClient: c,
 		ContainerName:      name,
 		ContainerID:        createResp.ID,

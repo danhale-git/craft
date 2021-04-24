@@ -21,7 +21,7 @@ import (
 
 func TestContainer_Command(t *testing.T) {
 	mockClient := &ContainerAPIDockerClientMock{}
-	d := &Container{ContainerAPIClient: mockClient}
+	d := &Server{ContainerAPIClient: mockClient}
 	conn, reader := net.Pipe()
 	mockClient.Conn = conn
 	mockClient.Reader = bufio.NewReader(reader)
@@ -48,7 +48,7 @@ func TestContainer_Command(t *testing.T) {
 }
 
 func TestContainer_LogReader(t *testing.T) {
-	d := &Container{ContainerAPIClient: &ContainerAPIDockerClientMock{}}
+	d := &Server{ContainerAPIClient: &ContainerAPIDockerClientMock{}}
 
 	r, err := d.LogReader(20)
 	if err != nil {

@@ -5,11 +5,11 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"os"
 	"strconv"
 	"strings"
 
 	"github.com/danhale-git/craft/internal/logger"
+
 	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 )
@@ -21,37 +21,15 @@ const (
 	imageName   = "danhaledocker/craftmine:v1.9" // The name of the docker image to use
 )
 
-// Container is a wrapper for docker's client.ContainerAPIClient which operates on a specific container.
-type Container struct {
+// Server is a wrapper for docker's client.ContainerAPIClient which operates on a specific container.
+type Server struct {
 	client.ContainerAPIClient
 	ContainerName, ContainerID string
 }
 
-// GetContainerOrExit is a convenience function for attempting to find an existing docker container with the given name.
-// If not found, a helpful error message is printed and the program exits without error.
-func GetContainerOrExit(containerName string) *Container {
-	d, err := GetContainer(containerName)
-
-	if err != nil {
-		// Container was not found
-		if _, ok := err.(*ContainerNotFoundError); ok {
-			logger.Info.Println(err)
-			os.Exit(0)
-		} else if _, ok := err.(*NotACraftContainerError); ok {
-			logger.Info.Println(err)
-			os.Exit(0)
-		}
-
-		// Something else went wrong
-		panic(err)
-	}
-
-	return d
-}
-
-// GetContainer returns a new default docker container API client for an existing container. If the given container name
-// doesn't exist an error of type ContainerNotFoundError is returned.
-func GetContainer(containerName string) (*Container, error) {
+// New returns a Server struct representing an existing server. If the given name doesn't exist an error of type
+// ContainerNotFoundError is returned.
+func New(containerName string) (*Server, error) {
 	cl, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		logger.Error.Fatalf("Error: Failed to create new docker client: %s", err)
@@ -62,7 +40,7 @@ func GetContainer(containerName string) (*Container, error) {
 		return nil, err
 	}
 
-	c := Container{
+	c := Server{
 		ContainerAPIClient: cl,
 		ContainerName:      containerName,
 		ContainerID:        id,
@@ -83,7 +61,7 @@ func GetContainer(containerName string) (*Container, error) {
 }
 
 // Command attaches to the container and runs the given arguments separated by spaces.
-func (c *Container) Command(args []string) error {
+func (c *Server) Command(args []string) error {
 	conn, err := c.CommandWriter()
 	if err != nil {
 		return err
@@ -100,7 +78,7 @@ func (c *Container) Command(args []string) error {
 }
 
 // CommandWriter returns a *net.Conn which streams to the container process stdin.
-func (c *Container) CommandWriter() (net.Conn, error) {
+func (c *Server) CommandWriter() (net.Conn, error) {
 	waiter, err := c.ContainerAttach(
 		context.Background(),
 		c.ContainerID,
@@ -118,7 +96,7 @@ func (c *Container) CommandWriter() (net.Conn, error) {
 
 // LogReader returns a buffer with the stdout and stderr from the running mc server process. New output will continually
 // be sent to the buffer. A negative tail value will result in the 'all' value being used.
-func (c *Container) LogReader(tail int) (*bufio.Reader, error) {
+func (c *Server) LogReader(tail int) (*bufio.Reader, error) {
 	logs, err := c.ContainerLogs(
 		context.Background(),
 		c.ContainerID,
@@ -138,7 +116,7 @@ func (c *Container) LogReader(tail int) (*bufio.Reader, error) {
 }
 
 // GetPort returns the port players use to connect to this server
-func (c *Container) GetPort() (int, error) {
+func (c *Server) GetPort() (int, error) {
 	cj, err := c.ContainerInspect(context.Background(), c.ContainerID)
 	if err != nil {
 		return 0, err

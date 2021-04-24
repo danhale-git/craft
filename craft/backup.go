@@ -39,7 +39,7 @@ func serverFiles() []string {
 }
 
 // CopyBackup saves a backup to the default local directory.
-func CopyBackup(c *dockerwrapper.Container) (string, error) {
+func CopyBackup(c *dockerwrapper.Server) (string, error) {
 	backupPath := filepath.Join(backupDirectory(), c.ContainerName)
 	fileName := fmt.Sprintf("%s_%s.zip", c.ContainerName, time.Now().Format(backup.FileNameTimeLayout))
 	backupFilePath := path.Join(backupPath, fileName)
@@ -104,7 +104,7 @@ func CopyBackup(c *dockerwrapper.Container) (string, error) {
 }
 
 // Exports the server's current world to the given destination directory.
-func ExportMCWorld(c *dockerwrapper.Container, dest string) error {
+func ExportMCWorld(c *dockerwrapper.Server, dest string) error {
 	if dest == "" {
 		dest = backupDirectory()
 	}
@@ -175,7 +175,7 @@ cmd <server> save resume')`)
 	return nil
 }
 
-func copyFiles(c *dockerwrapper.Container, f io.Writer, containerPrefix string, paths []string) error {
+func copyFiles(c *dockerwrapper.Server, f io.Writer, containerPrefix string, paths []string) error {
 	// Write zip data to out file
 	zw := zip.NewWriter(f)
 
@@ -332,7 +332,7 @@ func backupDirectory() string {
 	return backupDir
 }
 
-func restoreBackup(c *dockerwrapper.Container, backupName string) error {
+func restoreBackup(c *dockerwrapper.Server, backupName string) error {
 	backupPath := filepath.Join(backupDirectory(), c.ContainerName)
 
 	// Open backup zip
