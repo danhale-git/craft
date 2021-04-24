@@ -9,7 +9,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/danhale-git/craft/internal/logger"
 	docker "github.com/docker/docker/api/types"
@@ -21,7 +20,6 @@ const (
 	defaultPort = 19132                          // Default port for player connections
 	protocol    = "UDP"                          // MC uses UDP
 	imageName   = "danhaledocker/craftmine:v1.9" // The name of the docker image to use
-	stopTimeout = 30
 )
 
 // Container is a wrapper for docker's client.ContainerAPIClient which operates on a specific container.
@@ -133,19 +131,6 @@ func (c *Container) CommandWriter() (net.Conn, error) {
 	}
 
 	return waiter.Conn, err
-}
-
-// Stop stops the docker container.
-func (c *Container) Stop() error {
-	logger.Info.Printf("stopping %s\n", c.ContainerName)
-
-	timeout := time.Duration(stopTimeout)
-
-	return c.ContainerStop(
-		context.Background(),
-		c.ContainerID,
-		&timeout,
-	)
 }
 
 // LogReader returns a buffer with the stdout and stderr from the running mc server process. New output will continually

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/danhale-git/craft/internal/backup"
 	"github.com/danhale-git/craft/internal/logger"
@@ -24,6 +25,7 @@ import (
 
 const (
 	RunMCCommand = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server"
+	stopTimeout  = 30
 )
 
 // CreateServer spawns a new craft server. Only the name is required. Full path to a .mcworld file, port and a slice of
@@ -46,7 +48,7 @@ func CreateServer(name string, port int, props []string, mcworld ZipOpener) erro
 	if mcworld != nil {
 		zr, err := mcworld.Open()
 		if err != nil {
-			if err := c.Stop(); err != nil {
+			if err := stopServer(c); err != nil {
 				logger.Panic(err)
 			}
 
@@ -97,7 +99,7 @@ func RunLatestBackup(name string, port int) (*dockerwrapper.Container, error) {
 
 	err = restoreBackup(c, f.Name())
 	if err != nil {
-		if err := c.Stop(); err != nil {
+		if err := stopServer(c); err != nil {
 			panic(err)
 		}
 
@@ -105,7 +107,7 @@ func RunLatestBackup(name string, port int) (*dockerwrapper.Container, error) {
 	}
 
 	if err = RunServer(c); err != nil {
-		if err := c.Stop(); err != nil {
+		if err := stopServer(c); err != nil {
 			panic(err)
 		}
 
@@ -147,7 +149,7 @@ func Stop(c *dockerwrapper.Container) error {
 		return fmt.Errorf("%s: running 'stop' command in server cli to stop server process: %s", c.ContainerName, err)
 	}
 
-	if err := c.Stop(); err != nil {
+	if err := stopServer(c); err != nil {
 		return fmt.Errorf("%s: stopping docker container: %s", c.ContainerName, err)
 	}
 
@@ -290,4 +292,16 @@ func PrintServers(all bool) error {
 	}
 
 	return nil
+}
+
+func stopServer(c *dockerwrapper.Container) error {
+	logger.Info.Printf("stopping %s\n", c.ContainerName)
+
+	timeout := time.Duration(stopTimeout)
+
+	return c.ContainerStop(
+		context.Background(),
+		c.ContainerID,
+		&timeout,
+	)
 }
