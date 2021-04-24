@@ -332,8 +332,8 @@ func backupDirectory() string {
 	return backupDir
 }
 
-func restoreBackup(d *dockerwrapper.Container, backupName string) error {
-	backupPath := filepath.Join(backupDirectory(), d.ContainerName)
+func restoreBackup(c *dockerwrapper.Container, backupName string) error {
+	backupPath := filepath.Join(backupDirectory(), c.ContainerName)
 
 	// Open backup zip
 	zr, err := zip.OpenReader(filepath.Join(backupPath, backupName))
@@ -341,7 +341,7 @@ func restoreBackup(d *dockerwrapper.Container, backupName string) error {
 		return err
 	}
 
-	if err = backup.Restore(&zr.Reader, d.CopyTo); err != nil {
+	if err = backup.Restore(&zr.Reader, c.ContainerID, dockerClient()); err != nil {
 		return err
 	}
 

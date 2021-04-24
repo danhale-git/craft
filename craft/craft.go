@@ -14,6 +14,10 @@ import (
 	"text/tabwriter"
 	"time"
 
+	docker "github.com/docker/docker/api/types"
+
+	"github.com/docker/docker/client"
+
 	"github.com/danhale-git/craft/internal/backup"
 	"github.com/danhale-git/craft/internal/logger"
 
@@ -27,6 +31,15 @@ const (
 	RunMCCommand = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server"
 	stopTimeout  = 30
 )
+
+func dockerClient() *client.Client {
+	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		logger.Error.Fatalf("Error: Failed to create new docker client: %s", err)
+	}
+
+	return c
+}
 
 // CreateServer spawns a new craft server. Only the name is required. Full path to a .mcworld file, port and a slice of
 // "property=newvalue" strings may also be provided.
@@ -55,7 +68,7 @@ func CreateServer(name string, port int, props []string, mcworld ZipOpener) erro
 			return fmt.Errorf("inavlid world file: %s", err)
 		}
 
-		if err = backup.RestoreMCWorld(&zr.Reader, c.CopyTo); err != nil {
+		if err = backup.RestoreMCWorld(&zr.Reader, c.ContainerID, dockerClient()); err != nil {
 			return fmt.Errorf("restoring backup: %s", err)
 		}
 
@@ -220,7 +233,16 @@ func SetServerProperties(propFlags []string, c *dockerwrapper.Container) error {
 			return fmt.Errorf("writing body: %s", err)
 		}
 
-		return c.CopyTo(filepath.Dir(containerPath), &buf)
+		err = c.CopyToContainer(
+			context.Background(),
+			c.ContainerID,
+			filepath.Dir(containerPath),
+			&buf,
+			docker.CopyToContainerOptions{},
+		)
+		if err != nil {
+			return fmt.Errorf("copying files to '%s': %s", filepath.Dir(containerPath), err)
+		}
 	}
 
 	return nil

@@ -2,7 +2,6 @@ package dockerwrapper
 
 import (
 	"bufio"
-	"bytes"
 	"context"
 	"fmt"
 	"net"
@@ -81,22 +80,6 @@ func GetContainer(containerName string) (*Container, error) {
 	}
 
 	return &c, nil
-}
-
-// CopyTo copies the given tar data to the destination path in the container.
-func (c *Container) CopyTo(destPath string, tar *bytes.Buffer) error {
-	err := c.CopyToContainer(
-		context.Background(),
-		c.ContainerID,
-		destPath,
-		tar,
-		docker.CopyToContainerOptions{},
-	)
-	if err != nil {
-		return fmt.Errorf("copying files to '%s': %s", destPath, err)
-	}
-
-	return nil
 }
 
 // Command attaches to the container and runs the given arguments separated by spaces.
