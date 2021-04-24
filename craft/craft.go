@@ -23,8 +23,6 @@ import (
 
 	"github.com/danhale-git/craft/internal/configure"
 	"github.com/danhale-git/craft/internal/server"
-
-	"github.com/danhale-git/craft/internal/dockerwrapper"
 )
 
 const (
@@ -43,15 +41,15 @@ func dockerClient() *client.Client {
 
 // GetServerOrExit is a convenience function for attempting to find an existing docker container with the given name.
 // If not found, a helpful error message is printed and the program exits without error.
-func GetServerOrExit(containerName string) *dockerwrapper.Server {
-	d, err := dockerwrapper.New(containerName)
+func GetServerOrExit(containerName string) *server.Server {
+	s, err := server.New(containerName)
 
 	if err != nil {
 		// Container was not found
-		if _, ok := err.(*dockerwrapper.ContainerNotFoundError); ok {
+		if _, ok := err.(*server.NotFoundError); ok {
 			logger.Info.Println(err)
 			os.Exit(0)
-		} else if _, ok := err.(*dockerwrapper.NotACraftContainerError); ok {
+		} else if _, ok := err.(*server.NotCraftError); ok {
 			logger.Info.Println(err)
 			os.Exit(0)
 		}
@@ -60,7 +58,7 @@ func GetServerOrExit(containerName string) *dockerwrapper.Server {
 		panic(err)
 	}
 
-	return d
+	return s
 }
 
 // CreateServer spawns a new craft server. Only the name is required. Full path to a .mcworld file, port and a slice of
@@ -113,8 +111,8 @@ func CreateServer(name string, port int, props []string, mcworld ZipOpener) erro
 }
 
 // RunLatestBackup sorts all available backup files per date and starts a server from the latest backup.
-func RunLatestBackup(name string, port int) (*dockerwrapper.Server, error) {
-	if _, err := dockerwrapper.New(name); err == nil {
+func RunLatestBackup(name string, port int) (*server.Server, error) {
+	if _, err := server.New(name); err == nil {
 		return nil, fmt.Errorf("server '%s' is already running (run `craft list`)", name)
 	}
 
@@ -153,22 +151,22 @@ func RunLatestBackup(name string, port int) (*dockerwrapper.Server, error) {
 }
 
 // runServer executes the server binary and waits for the server to be ready before returning.
-func RunServer(c *dockerwrapper.Server) error {
+func RunServer(s *server.Server) error {
 	// Run the bedrock_server process
-	if err := c.Command(strings.Split(RunMCCommand, " ")); err != nil {
+	if err := s.Command(strings.Split(RunMCCommand, " ")); err != nil {
 		return err
 	}
 
-	logs, err := c.LogReader(-1) // Negative number results in all logs
+	logs, err := s.LogReader(-1) // Negative number results in all logs
 	if err != nil {
 		return err
 	}
 
-	s := bufio.NewScanner(logs)
-	s.Split(bufio.ScanLines)
+	scanner := bufio.NewScanner(logs)
+	scanner.Split(bufio.ScanLines)
 
-	for s.Scan() {
-		if s.Text() == "[INFO] Server started." {
+	for scanner.Scan() {
+		if scanner.Text() == "[INFO] Server started." {
 			// Server has finished starting
 			return nil
 		}
@@ -179,13 +177,13 @@ func RunServer(c *dockerwrapper.Server) error {
 
 // Stop executes a stop command first in the server process cli then on the container itself, stopping the
 // server. The server must be saves separately to persist the world and settings.
-func Stop(c *dockerwrapper.Server) error {
-	if err := c.Command([]string{"stop"}); err != nil {
-		return fmt.Errorf("%s: running 'stop' command in server cli to stop server process: %s", c.ContainerName, err)
+func Stop(s *server.Server) error {
+	if err := s.Command([]string{"stop"}); err != nil {
+		return fmt.Errorf("%s: running 'stop' command in server cli to stop server process: %s", s.ContainerName, err)
 	}
 
-	if err := stopServer(c); err != nil {
-		return fmt.Errorf("%s: stopping docker container: %s", c.ContainerName, err)
+	if err := stopServer(s); err != nil {
+		return fmt.Errorf("%s: stopping docker container: %s", s.ContainerName, err)
 	}
 
 	return nil
@@ -193,7 +191,7 @@ func Stop(c *dockerwrapper.Server) error {
 
 // SetServerProperties takes a collection of key=value pairs and applies them to the server.properties configuration
 // file. If a key is missing, an error will be returned and no changes will be made.
-func SetServerProperties(propFlags []string, c *dockerwrapper.Server) error {
+func SetServerProperties(propFlags []string, s *server.Server) error {
 	if len(propFlags) > 0 {
 		k := make([]string, len(propFlags))
 		v := make([]string, len(propFlags))
@@ -210,9 +208,9 @@ func SetServerProperties(propFlags []string, c *dockerwrapper.Server) error {
 
 		containerPath := server.FullPaths.ServerProperties
 
-		data, _, err := c.CopyFromContainer(
+		data, _, err := s.CopyFromContainer(
 			context.Background(),
-			c.ContainerID,
+			s.ContainerID,
 			containerPath,
 		)
 		if err != nil {
@@ -255,9 +253,9 @@ func SetServerProperties(propFlags []string, c *dockerwrapper.Server) error {
 			return fmt.Errorf("writing body: %s", err)
 		}
 
-		err = c.CopyToContainer(
+		err = s.CopyToContainer(
 			context.Background(),
-			c.ContainerID,
+			s.ContainerID,
 			filepath.Dir(containerPath),
 			&buf,
 			docker.CopyToContainerOptions{},
@@ -281,12 +279,12 @@ func PrintServers(all bool) error {
 	}
 
 	for _, s := range servers {
-		c, err := dockerwrapper.New(s.ContainerName)
+		s, err := server.New(s.ContainerName)
 		if err != nil {
-			return fmt.Errorf("creating docker client for container '%s': %s", s.ContainerName, err)
+			return fmt.Errorf("creating docker client: %s", err)
 		}
 
-		port, err := c.GetPort()
+		port, err := s.GetPort()
 		if err != nil {
 			return fmt.Errorf("getting port for container '%s': '%s'", s.ContainerName, err)
 		}
@@ -338,14 +336,14 @@ func PrintServers(all bool) error {
 	return nil
 }
 
-func stopServer(c *dockerwrapper.Server) error {
-	logger.Info.Printf("stopping %s\n", c.ContainerName)
+func stopServer(s *server.Server) error {
+	logger.Info.Printf("stopping %s\n", s.ContainerName)
 
 	timeout := time.Duration(stopTimeout)
 
-	return c.ContainerStop(
+	return s.ContainerStop(
 		context.Background(),
-		c.ContainerID,
+		s.ContainerID,
 		&timeout,
 	)
 }

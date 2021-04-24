@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/danhale-git/craft/internal/dockerwrapper"
+	"github.com/danhale-git/craft/internal/server"
 
 	"github.com/moby/term"
 
@@ -42,28 +42,28 @@ func newClient() *client.Client {
 }
 
 // ServerClients returns a Container for each active server.
-func ServerClients() ([]*dockerwrapper.Server, error) {
+func ServerClients() ([]*server.Server, error) {
 	names, err := containerNames()
 	if err != nil {
 		return nil, fmt.Errorf("getting server names: %s", err)
 	}
 
-	clients := make([]*dockerwrapper.Server, 0)
+	servers := make([]*server.Server, 0)
 
 	for _, n := range names {
-		c, err := dockerwrapper.New(n)
+		s, err := server.New(n)
 		if err != nil {
-			if _, ok := err.(*dockerwrapper.NotACraftContainerError); ok {
+			if _, ok := err.(*server.NotCraftError); ok {
 				continue
 			}
 
 			return nil, fmt.Errorf("creating client for container '%s': %s", n, err)
 		}
 
-		clients = append(clients, c)
+		servers = append(servers, s)
 	}
 
-	return clients, nil
+	return servers, nil
 }
 
 //go:embed Dockerfile
@@ -146,7 +146,7 @@ func CheckImage() (bool, error) {
 // It is the equivalent of the following docker command:
 //
 //    docker run -d -e EULA=TRUE -p <HOST_PORT>:19132/udp <imageName>
-func RunContainer(hostPort int, name string) (*dockerwrapper.Server, error) {
+func RunContainer(hostPort int, name string) (*server.Server, error) {
 	if hostPort == 0 {
 		hostPort = nextAvailablePort()
 	}
@@ -181,7 +181,7 @@ func RunContainer(hostPort int, name string) (*dockerwrapper.Server, error) {
 			AttachStdin:  true, AttachStdout: true, AttachStderr: true,
 			Tty:       true,
 			OpenStdin: true,
-			Labels:    map[string]string{dockerwrapper.CraftLabel: ""},
+			Labels:    map[string]string{server.CraftLabel: ""},
 		},
 		&container.HostConfig{
 			PortBindings: portBinding,
@@ -198,13 +198,13 @@ func RunContainer(hostPort int, name string) (*dockerwrapper.Server, error) {
 		return nil, fmt.Errorf("starting container: %s", err)
 	}
 
-	d := dockerwrapper.Server{
+	s := server.Server{
 		ContainerAPIClient: c,
 		ContainerName:      name,
 		ContainerID:        createResp.ID,
 	}
 
-	return &d, nil
+	return &s, nil
 }
 
 // containerNames returns a slice containing the names of all running containers.

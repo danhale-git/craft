@@ -1,4 +1,4 @@
-package dockerwrapper
+package server
 
 import (
 	"bufio"
@@ -10,9 +10,9 @@ import (
 	"github.com/danhale-git/craft/internal/clientmock"
 )
 
-func TestContainer_Command(t *testing.T) {
+func TestServer_Command(t *testing.T) {
 	mockClient := &clientmock.ContainerAPIDockerClientMock{}
-	d := &Server{ContainerAPIClient: mockClient}
+	s := &Server{ContainerAPIClient: mockClient}
 	conn, reader := net.Pipe()
 	mockClient.Conn = conn
 	mockClient.Reader = bufio.NewReader(reader)
@@ -20,7 +20,7 @@ func TestContainer_Command(t *testing.T) {
 	c := []string{"arg1", "arg2", "arg3"}
 
 	go func() {
-		err := d.Command(c)
+		err := s.Command(c)
 		if err != nil {
 			t.Errorf("error returned for valid input")
 		}
@@ -38,10 +38,10 @@ func TestContainer_Command(t *testing.T) {
 	}
 }
 
-func TestContainer_LogReader(t *testing.T) {
-	d := &Server{ContainerAPIClient: &clientmock.ContainerAPIDockerClientMock{}}
+func TestServer_LogReader(t *testing.T) {
+	s := &Server{ContainerAPIClient: &clientmock.ContainerAPIDockerClientMock{}}
 
-	r, err := d.LogReader(20)
+	r, err := s.LogReader(20)
 	if err != nil {
 		t.Errorf("error returned for valid input: %s", err)
 	}
@@ -57,11 +57,11 @@ func TestContainer_LogReader(t *testing.T) {
 }
 
 func TestContainerID(t *testing.T) {
-	d := &Server{ContainerAPIClient: &clientmock.ContainerAPIDockerClientMock{}}
+	s := &Server{ContainerAPIClient: &clientmock.ContainerAPIDockerClientMock{}}
 
 	for i := 1; i <= 3; i++ {
 		want := fmt.Sprintf("mc%d_ID", i)
-		got, err := containerID(fmt.Sprintf("mc%d", i), d)
+		got, err := containerID(fmt.Sprintf("mc%d", i), s)
 
 		if err != nil {
 			t.Errorf("error returned for valid input: %s", err)

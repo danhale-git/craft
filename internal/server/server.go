@@ -1,4 +1,4 @@
-package dockerwrapper
+package server
 
 import (
 	"bufio"
@@ -23,7 +23,7 @@ type Server struct {
 }
 
 // New returns a Server struct representing an existing server. If the given name doesn't exist an error of type
-// ContainerNotFoundError is returned.
+// NotFoundError is returned.
 func New(containerName string) (*Server, error) {
 	cl, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
@@ -49,7 +49,7 @@ func New(containerName string) (*Server, error) {
 	_, ok := containerJSON.Config.Labels[CraftLabel]
 
 	if !ok {
-		return nil, &NotACraftContainerError{Name: containerName}
+		return nil, &NotCraftError{Name: containerName}
 	}
 
 	return &c, nil
@@ -153,24 +153,24 @@ func containerID(name string, client client.ContainerAPIClient) (string, error) 
 		}
 	}
 
-	return "", &ContainerNotFoundError{Name: name}
+	return "", &NotFoundError{Name: name}
 }
 
-// ContainerNotFoundError tells the caller that no containers were found with the given name.
-type ContainerNotFoundError struct {
+// NotFoundError tells the caller that no containers were found with the given name.
+type NotFoundError struct {
 	Name string
 }
 
-func (e *ContainerNotFoundError) Error() string {
+func (e *NotFoundError) Error() string {
 	return fmt.Sprintf("container with name '%s' not found.", e.Name)
 }
 
-// NotACraftContainerError reports the instance where a container is found with a given name but lacks the label
+// NotCraftError reports the instance where a container is found with a given name but lacks the label
 // indicating that it is managed using craft.
-type NotACraftContainerError struct {
+type NotCraftError struct {
 	Name string
 }
 
-func (e *NotACraftContainerError) Error() string {
+func (e *NotCraftError) Error() string {
 	return fmt.Sprintf("container found with name '%s' but it does not appear to be a craft server.", e.Name)
 }
