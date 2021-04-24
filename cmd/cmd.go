@@ -9,7 +9,6 @@ import (
 
 	"github.com/danhale-git/craft/craft"
 
-	"github.com/danhale-git/craft/internal/dockerwrapper"
 	"github.com/danhale-git/craft/internal/logger"
 	"github.com/spf13/cobra"
 )
@@ -58,7 +57,7 @@ func NewRootCmd() *cobra.Command {
 
 			logger.Init(logPath, logLevel, fmt.Sprintf("[%s]", cmd.Name()))
 
-			ok, err := dockerwrapper.CheckImage()
+			ok, err := craft.CheckImage()
 			if err != nil {
 				log.Fatalf("Error checking docker images: %s", err)
 			}
@@ -369,7 +368,7 @@ func NewBuildCommand() *cobra.Command {
 		Short: "Build the server image.",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
-			if err := dockerwrapper.BuildImage(); err != nil {
+			if err := craft.BuildImage(); err != nil {
 				log.Fatalf("Error building image: %s", err)
 			}
 		},

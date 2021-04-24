@@ -14,12 +14,7 @@ import (
 	"github.com/docker/docker/client"
 )
 
-const (
-	anyIP       = "0.0.0.0"                      // Refers to any/all IPv4 addresses
-	defaultPort = 19132                          // Default port for player connections
-	protocol    = "UDP"                          // MC uses UDP
-	imageName   = "danhaledocker/craftmine:v1.9" // The name of the docker image to use
-)
+const CraftLabel = "danhale-git/craft"
 
 // Server is a wrapper for docker's client.ContainerAPIClient which operates on a specific container.
 type Server struct {
@@ -51,7 +46,7 @@ func New(containerName string) (*Server, error) {
 		return nil, fmt.Errorf("inspecting container: %s", err)
 	}
 
-	_, ok := containerJSON.Config.Labels[craftLabel]
+	_, ok := containerJSON.Config.Labels[CraftLabel]
 
 	if !ok {
 		return nil, &NotACraftContainerError{Name: containerName}
@@ -144,6 +139,21 @@ func (c *Server) GetPort() (int, error) {
 	}
 
 	return port, nil
+}
+
+func containerID(name string, client client.ContainerAPIClient) (string, error) {
+	containers, err := client.ContainerList(context.Background(), docker.ContainerListOptions{})
+	if err != nil {
+		return "", fmt.Errorf("listing all containers: %s", err)
+	}
+
+	for _, ctr := range containers {
+		if strings.Trim(ctr.Names[0], "/") == name {
+			return ctr.ID, nil
+		}
+	}
+
+	return "", &ContainerNotFoundError{Name: name}
 }
 
 // ContainerNotFoundError tells the caller that no containers were found with the given name.

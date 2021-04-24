@@ -74,7 +74,7 @@ func CreateServer(name string, port int, props []string, mcworld ZipOpener) erro
 	}
 
 	// Create a container for the server
-	c, err := dockerwrapper.RunContainer(port, name)
+	c, err := RunContainer(port, name)
 	if err != nil {
 		return fmt.Errorf("creating new container: %s", err)
 	}
@@ -122,7 +122,7 @@ func RunLatestBackup(name string, port int) (*dockerwrapper.Server, error) {
 		return nil, fmt.Errorf("stopped server with name '%s' doesn't exist", name)
 	}
 
-	c, err := dockerwrapper.RunContainer(port, name)
+	c, err := RunContainer(port, name)
 	if err != nil {
 		return nil, fmt.Errorf("%s: running server: %s", name, err)
 	}
@@ -275,7 +275,7 @@ func SetServerProperties(propFlags []string, c *dockerwrapper.Server) error {
 func PrintServers(all bool) error {
 	w := tabwriter.NewWriter(os.Stdout, 3, 3, 3, ' ', tabwriter.TabIndent)
 
-	servers, err := dockerwrapper.ServerClients()
+	servers, err := ServerClients()
 	if err != nil {
 		return fmt.Errorf("getting server clients: %s", err)
 	}
