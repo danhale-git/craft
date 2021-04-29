@@ -110,37 +110,6 @@ func (c *Server) LogReader(tail int) (*bufio.Reader, error) {
 	return bufio.NewReader(logs), nil
 }
 
-// GetPort returns the port players use to connect to this server
-func (c *Server) GetPort() (int, error) {
-	cj, err := c.ContainerInspect(context.Background(), c.ContainerID)
-	if err != nil {
-		return 0, err
-	}
-
-	portBindings := cj.HostConfig.PortBindings
-
-	if len(portBindings) == 0 {
-		return 0, fmt.Errorf("no ports bound for container %s", c.ContainerName)
-	}
-
-	var port int
-
-	for _, v := range portBindings {
-		p, err := strconv.Atoi(v[0].HostPort)
-		if err != nil {
-			return 0, fmt.Errorf("error reading container port: %s", err)
-		}
-
-		port = p
-	}
-
-	if port == 0 {
-		panic("port is 0")
-	}
-
-	return port, nil
-}
-
 func containerID(name string, client client.ContainerAPIClient) (string, error) {
 	containers, err := client.ContainerList(context.Background(), docker.ContainerListOptions{})
 	if err != nil {

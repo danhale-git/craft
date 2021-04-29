@@ -228,15 +228,15 @@ func containerNames() ([]string, error) {
 // nextAvailablePort returns the next available port, starting with the default mc port. It checks the first exposed
 // port of all running containers to determine if a port is in use.
 func nextAvailablePort() int {
-	clients, err := ServerClients()
+	servers, err := ServerClients()
 	if err != nil {
 		panic(err)
 	}
 
-	usedPorts := make([]int, len(clients))
+	usedPorts := make([]int, len(servers))
 
-	for i, c := range clients {
-		p, err := c.GetPort()
+	for i, s := range servers {
+		p, err := getPort(s)
 		if err != nil {
 			panic(err)
 		}
@@ -259,4 +259,35 @@ OUTER:
 	}
 
 	panic("100 ports were not available")
+}
+
+// getPort returns the port players use to connect to this server
+func getPort(s *server.Server) (int, error) {
+	cj, err := s.ContainerInspect(context.Background(), s.ContainerID)
+	if err != nil {
+		return 0, err
+	}
+
+	portBindings := cj.HostConfig.PortBindings
+
+	if len(portBindings) == 0 {
+		return 0, fmt.Errorf("no ports bound for container %s", s.ContainerName)
+	}
+
+	var port int
+
+	for _, v := range portBindings {
+		p, err := strconv.Atoi(v[0].HostPort)
+		if err != nil {
+			return 0, fmt.Errorf("error reading container port: %s", err)
+		}
+
+		port = p
+	}
+
+	if port == 0 {
+		panic("port is 0")
+	}
+
+	return port, nil
 }
