@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/danhale-git/craft/internal/clientmock"
+	"github.com/danhale-git/craft/internal/mock"
 
 	"github.com/docker/docker/client"
 
@@ -97,7 +97,7 @@ func TestRestore(t *testing.T) {
 }
 
 func testRestoreFunc(z *zip.Reader, restoreFunc func(*zip.Reader, string, client.ContainerAPIClient) error) ([]string, error) { //nolint:lll
-	mockClient := &clientmock.ContainerAPIDockerClientMock{}
+	mockClient := &mock.ContainerAPIDockerClientMock{}
 	mockClient.CopyToFileNames = make([]string, 0)
 
 	if err := restoreFunc(z, "", mockClient); err != nil {

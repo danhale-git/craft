@@ -1,4 +1,4 @@
-package clientmock
+package mock
 
 import (
 	"archive/tar"

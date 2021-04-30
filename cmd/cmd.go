@@ -57,7 +57,7 @@ func NewRootCmd() *cobra.Command {
 
 			logger.Init(logPath, logLevel, fmt.Sprintf("[%s]", cmd.Name()))
 
-			ok, err := craft.CheckImage()
+			ok, err := craft.CheckImage(craft.NewClient())
 			if err != nil {
 				log.Fatalf("Error checking docker images: %s", err)
 			}

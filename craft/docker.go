@@ -32,7 +32,7 @@ const (
 	imageName   = "danhaledocker/craftmine:v1.9" // The name of the docker image to use
 )
 
-func newClient() *client.Client {
+func NewClient() *client.Client {
 	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		logger.Error.Fatalf("Error: Failed to create new docker client: %s", err)
@@ -71,7 +71,7 @@ var dockerfile []byte //nolint:gochecknoglobals // embed needs a global
 
 // BuildImage builds the server image.
 func BuildImage() error {
-	c := newClient()
+	c := NewClient()
 
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
@@ -125,9 +125,7 @@ func BuildImage() error {
 }
 
 // CheckImage returns true if the craft server image exists.
-func CheckImage() (bool, error) {
-	c := newClient()
-
+func CheckImage(c client.ImageAPIClient) (bool, error) {
 	images, err := c.ImageList(context.Background(), docker.ImageListOptions{})
 	if err != nil {
 		return false, err
@@ -209,7 +207,7 @@ func RunContainer(hostPort int, name string) (*server.Server, error) {
 
 // containerNames returns a slice containing the names of all running containers.
 func containerNames() ([]string, error) {
-	containers, err := newClient().ContainerList(
+	containers, err := NewClient().ContainerList(
 		context.Background(),
 		docker.ContainerListOptions{},
 	)
