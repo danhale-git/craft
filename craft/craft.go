@@ -42,7 +42,7 @@ func dockerClient() *client.Client {
 // GetServerOrExit is a convenience function for attempting to find an existing docker container with the given name.
 // If not found, a helpful error message is printed and the program exits without error.
 func GetServerOrExit(containerName string) *server.Server {
-	s, err := server.New(containerName)
+	s, err := server.New(NewClient(), containerName)
 
 	if err != nil {
 		// Container was not found
@@ -112,7 +112,7 @@ func CreateServer(name string, port int, props []string, mcworld ZipOpener) erro
 
 // RunLatestBackup sorts all available backup files per date and starts a server from the latest backup.
 func RunLatestBackup(name string, port int) (*server.Server, error) {
-	if _, err := server.New(name); err == nil {
+	if _, err := server.New(NewClient(), name); err == nil {
 		return nil, fmt.Errorf("server '%s' is already running (run `craft list`)", name)
 	}
 
@@ -273,13 +273,13 @@ func SetServerProperties(propFlags []string, s *server.Server) error {
 func PrintServers(all bool) error {
 	w := tabwriter.NewWriter(os.Stdout, 3, 3, 3, ' ', tabwriter.TabIndent)
 
-	servers, err := ServerClients()
+	servers, err := AllServers(NewClient())
 	if err != nil {
 		return fmt.Errorf("getting server clients: %s", err)
 	}
 
 	for _, s := range servers {
-		s, err := server.New(s.ContainerName)
+		s, err := server.New(NewClient(), s.ContainerName)
 		if err != nil {
 			return fmt.Errorf("creating docker client: %s", err)
 		}

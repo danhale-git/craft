@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/danhale-git/craft/internal/server"
+
 	"github.com/danhale-git/craft/internal/mock"
 	"github.com/docker/docker/api/types"
 )
@@ -15,6 +17,29 @@ type ImageListClient struct {
 
 func (i ImageListClient) ImageList(_ context.Context, _ types.ImageListOptions) ([]types.ImageSummary, error) {
 	return i.imageSummaries, nil
+}
+
+func TestServerClients(t *testing.T) {
+	c := &mock.DockerContainerClient{ImageLabel: server.CraftLabel}
+
+	servers, err := AllServers(c)
+	if err != nil {
+		t.Errorf("error returned after valid input: %s", err)
+	}
+
+	for i, want := range []string{"mc1_ID", "mc2_ID", "mc3_ID"} {
+		got := servers[i].ContainerID
+		if got != want {
+			t.Errorf("unexpected server id: want %s: got %s", want, got)
+		}
+	}
+
+	for i, want := range []string{"mc1", "mc2", "mc3"} {
+		got := servers[i].ContainerName
+		if got != want {
+			t.Errorf("unexpected server name: want %s: got %s", want, got)
+		}
+	}
 }
 
 func TestCheckImage(t *testing.T) {

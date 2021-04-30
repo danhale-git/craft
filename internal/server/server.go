@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/danhale-git/craft/internal/logger"
-
 	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 )
@@ -24,12 +22,7 @@ type Server struct {
 
 // New returns a Server struct representing an existing server. If the given name doesn't exist an error of type
 // NotFoundError is returned.
-func New(containerName string) (*Server, error) {
-	cl, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		logger.Error.Fatalf("Error: Failed to create new docker client: %s", err)
-	}
-
+func New(cl client.ContainerAPIClient, containerName string) (*Server, error) {
 	id, err := containerID(containerName, cl)
 	if err != nil {
 		return nil, err

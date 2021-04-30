@@ -25,6 +25,7 @@ type DockerContainerClient struct {
 	Reader *bufio.Reader
 
 	CopyToFileNames []string
+	ImageLabel      string
 }
 
 //nolint:lll // mock method
@@ -96,6 +97,13 @@ func (m *DockerContainerClient) CopyToContainer(_ context.Context, _ string, dst
 }
 
 //nolint:lll // mock method
+func (m *DockerContainerClient) ContainerInspect(_ context.Context, _ string) (types.ContainerJSON, error) {
+	return types.ContainerJSON{Config: &container.Config{
+		Labels: map[string]string{m.ImageLabel: ""},
+	}}, nil
+}
+
+//nolint:lll // mock method
 func (m *DockerContainerClient) ContainerCommit(_ context.Context, _ string, _ types.ContainerCommitOptions) (types.IDResponse, error) {
 	panic("not implemented!")
 }
@@ -137,11 +145,6 @@ func (m *DockerContainerClient) ContainerExecStart(_ context.Context, _ string, 
 
 //nolint:lll // mock method
 func (m *DockerContainerClient) ContainerExport(_ context.Context, _ string) (io.ReadCloser, error) {
-	panic("not implemented!")
-}
-
-//nolint:lll // mock method
-func (m *DockerContainerClient) ContainerInspect(_ context.Context, _ string) (types.ContainerJSON, error) {
 	panic("not implemented!")
 }
 

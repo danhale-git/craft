@@ -41,17 +41,25 @@ func NewClient() *client.Client {
 	return c
 }
 
-// ServerClients returns a Container for each active server.
-func ServerClients() ([]*server.Server, error) {
-	names, err := containerNames()
+// AllServers returns a client for each active server.
+func AllServers(c client.ContainerAPIClient) ([]*server.Server, error) {
+	containers, err := c.ContainerList(
+		context.Background(),
+		docker.ContainerListOptions{},
+	)
 	if err != nil {
-		return nil, fmt.Errorf("getting server names: %s", err)
+		return nil, fmt.Errorf("listing docker containers: %s", err)
+	}
+
+	names := make([]string, len(containers))
+	for i, c := range containers {
+		names[i] = strings.Replace(c.Names[0], "/", "", 1)
 	}
 
 	servers := make([]*server.Server, 0)
 
 	for _, n := range names {
-		s, err := server.New(n)
+		s, err := server.New(c, n)
 		if err != nil {
 			if _, ok := err.(*server.NotCraftError); ok {
 				continue
@@ -205,28 +213,10 @@ func RunContainer(hostPort int, name string) (*server.Server, error) {
 	return &s, nil
 }
 
-// containerNames returns a slice containing the names of all running containers.
-func containerNames() ([]string, error) {
-	containers, err := NewClient().ContainerList(
-		context.Background(),
-		docker.ContainerListOptions{},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("listing docker containers: %s", err)
-	}
-
-	names := make([]string, len(containers))
-	for i, c := range containers {
-		names[i] = strings.Replace(c.Names[0], "/", "", 1)
-	}
-
-	return names, nil
-}
-
 // nextAvailablePort returns the next available port, starting with the default mc port. It checks the first exposed
 // port of all running containers to determine if a port is in use.
 func nextAvailablePort() int {
-	servers, err := ServerClients()
+	servers, err := AllServers(NewClient())
 	if err != nil {
 		panic(err)
 	}
