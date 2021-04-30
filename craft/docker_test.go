@@ -32,7 +32,7 @@ func TestCheckImage(t *testing.T) {
 		},
 	}
 
-	got, err := CheckImage(client)
+	got, err := ImageExists(client)
 	if err != nil {
 		t.Logf("%+v", client.imageSummaries)
 		t.Errorf("error thrown with valid input: %s", err)
@@ -45,7 +45,7 @@ func TestCheckImage(t *testing.T) {
 
 	client.imageSummaries = append(client.imageSummaries, types.ImageSummary{RepoTags: []string{imageName}})
 
-	got, err = CheckImage(client)
+	got, err = ImageExists(client)
 	if err != nil {
 		t.Logf("%+v", client.imageSummaries)
 		t.Errorf("error thrown with valid input: %s", err)

@@ -11,7 +11,7 @@ import (
 )
 
 func TestServer_Command(t *testing.T) {
-	mockClient := &mock.ContainerAPIDockerClientMock{}
+	mockClient := &mock.DockerContainerClient{}
 	s := &Server{ContainerAPIClient: mockClient}
 	conn, reader := net.Pipe()
 	mockClient.Conn = conn
@@ -39,7 +39,7 @@ func TestServer_Command(t *testing.T) {
 }
 
 func TestServer_LogReader(t *testing.T) {
-	s := &Server{ContainerAPIClient: &mock.ContainerAPIDockerClientMock{}}
+	s := &Server{ContainerAPIClient: &mock.DockerContainerClient{}}
 
 	r, err := s.LogReader(20)
 	if err != nil {
@@ -57,7 +57,7 @@ func TestServer_LogReader(t *testing.T) {
 }
 
 func TestContainerID(t *testing.T) {
-	s := &Server{ContainerAPIClient: &mock.ContainerAPIDockerClientMock{}}
+	s := &Server{ContainerAPIClient: &mock.DockerContainerClient{}}
 
 	for i := 1; i <= 3; i++ {
 		want := fmt.Sprintf("mc%d_ID", i)

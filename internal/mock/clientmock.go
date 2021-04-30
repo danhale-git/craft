@@ -20,7 +20,7 @@ import (
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
-type ContainerAPIDockerClientMock struct {
+type DockerContainerClient struct {
 	Conn   net.Conn
 	Reader *bufio.Reader
 
@@ -28,7 +28,7 @@ type ContainerAPIDockerClientMock struct {
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerAttach(_ context.Context, _ string, _ types.ContainerAttachOptions) (types.HijackedResponse, error) {
+func (m *DockerContainerClient) ContainerAttach(_ context.Context, _ string, _ types.ContainerAttachOptions) (types.HijackedResponse, error) {
 	rw := types.HijackedResponse{
 		Conn:   m.Conn,
 		Reader: m.Reader,
@@ -40,7 +40,7 @@ func (m *ContainerAPIDockerClientMock) ContainerAttach(_ context.Context, _ stri
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerLogs(_ context.Context, _ string, _ types.ContainerLogsOptions) (io.ReadCloser, error) {
+func (m *DockerContainerClient) ContainerLogs(_ context.Context, _ string, _ types.ContainerLogsOptions) (io.ReadCloser, error) {
 	r := ioutil.NopCloser(bytes.NewReader([]byte(`NO LOG FILE! - setting up server logging...
 [2020-12-22 20:24:38 INFO] Starting Server
 [2020-12-22 20:24:38 INFO] Version 1.16.200.2
@@ -59,7 +59,7 @@ func (m *ContainerAPIDockerClientMock) ContainerLogs(_ context.Context, _ string
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerList(_ context.Context, _ types.ContainerListOptions) ([]types.Container, error) {
+func (m *DockerContainerClient) ContainerList(_ context.Context, _ types.ContainerListOptions) ([]types.Container, error) {
 	containers := []types.Container{
 		{ID: "mc1_ID", Names: []string{"/mc1"}},
 		{ID: "mc2_ID", Names: []string{"/mc2"}},
@@ -71,9 +71,9 @@ func (m *ContainerAPIDockerClientMock) ContainerList(_ context.Context, _ types.
 
 // func (cli *Client) CopyToContainer(ctx context.Context, containerID, dstPath string, content io.Reader, options types.CopyToContainerOptions) error {
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) CopyToContainer(_ context.Context, _ string, dstPath string, r io.Reader, _ types.CopyToContainerOptions) error {
+func (m *DockerContainerClient) CopyToContainer(_ context.Context, _ string, dstPath string, r io.Reader, _ types.CopyToContainerOptions) error {
 	if m.CopyToFileNames == nil {
-		panic("ContainerAPIDockerClientMock.CopyToFileNames must be assigned")
+		panic("DockerContainerClient.CopyToFileNames must be assigned")
 	}
 
 	// Open and iterate through the files in the tar archive
@@ -96,141 +96,141 @@ func (m *ContainerAPIDockerClientMock) CopyToContainer(_ context.Context, _ stri
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerCommit(_ context.Context, _ string, _ types.ContainerCommitOptions) (types.IDResponse, error) {
+func (m *DockerContainerClient) ContainerCommit(_ context.Context, _ string, _ types.ContainerCommitOptions) (types.IDResponse, error) {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerCreate(_ context.Context, _ *container.Config, _ *container.HostConfig, _ *network.NetworkingConfig, _ *v1.Platform, _ string) (container.ContainerCreateCreatedBody, error) {
+func (m *DockerContainerClient) ContainerCreate(_ context.Context, _ *container.Config, _ *container.HostConfig, _ *network.NetworkingConfig, _ *v1.Platform, _ string) (container.ContainerCreateCreatedBody, error) {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerDiff(_ context.Context, _ string) ([]container.ContainerChangeResponseItem, error) {
+func (m *DockerContainerClient) ContainerDiff(_ context.Context, _ string) ([]container.ContainerChangeResponseItem, error) {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerExecAttach(_ context.Context, _ string, _ types.ExecStartCheck) (types.HijackedResponse, error) {
+func (m *DockerContainerClient) ContainerExecAttach(_ context.Context, _ string, _ types.ExecStartCheck) (types.HijackedResponse, error) {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerExecCreate(_ context.Context, _ string, _ types.ExecConfig) (types.IDResponse, error) {
+func (m *DockerContainerClient) ContainerExecCreate(_ context.Context, _ string, _ types.ExecConfig) (types.IDResponse, error) {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerExecInspect(_ context.Context, _ string) (types.ContainerExecInspect, error) {
+func (m *DockerContainerClient) ContainerExecInspect(_ context.Context, _ string) (types.ContainerExecInspect, error) {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerExecResize(_ context.Context, _ string, _ types.ResizeOptions) error {
+func (m *DockerContainerClient) ContainerExecResize(_ context.Context, _ string, _ types.ResizeOptions) error {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerExecStart(_ context.Context, _ string, _ types.ExecStartCheck) error {
+func (m *DockerContainerClient) ContainerExecStart(_ context.Context, _ string, _ types.ExecStartCheck) error {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerExport(_ context.Context, _ string) (io.ReadCloser, error) {
+func (m *DockerContainerClient) ContainerExport(_ context.Context, _ string) (io.ReadCloser, error) {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerInspect(_ context.Context, _ string) (types.ContainerJSON, error) {
+func (m *DockerContainerClient) ContainerInspect(_ context.Context, _ string) (types.ContainerJSON, error) {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerInspectWithRaw(_ context.Context, _ string, _ bool) (types.ContainerJSON, []byte, error) {
+func (m *DockerContainerClient) ContainerInspectWithRaw(_ context.Context, _ string, _ bool) (types.ContainerJSON, []byte, error) {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerKill(_ context.Context, _ string, _ string) error {
+func (m *DockerContainerClient) ContainerKill(_ context.Context, _ string, _ string) error {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerPause(_ context.Context, _ string) error {
+func (m *DockerContainerClient) ContainerPause(_ context.Context, _ string) error {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerRemove(_ context.Context, _ string, _ types.ContainerRemoveOptions) error {
+func (m *DockerContainerClient) ContainerRemove(_ context.Context, _ string, _ types.ContainerRemoveOptions) error {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerRename(_ context.Context, _ string, _ string) error {
+func (m *DockerContainerClient) ContainerRename(_ context.Context, _ string, _ string) error {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerResize(_ context.Context, _ string, _ types.ResizeOptions) error {
+func (m *DockerContainerClient) ContainerResize(_ context.Context, _ string, _ types.ResizeOptions) error {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerRestart(_ context.Context, _ string, _ *time.Duration) error {
+func (m *DockerContainerClient) ContainerRestart(_ context.Context, _ string, _ *time.Duration) error {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerStatPath(_ context.Context, _ string, _ string) (types.ContainerPathStat, error) {
+func (m *DockerContainerClient) ContainerStatPath(_ context.Context, _ string, _ string) (types.ContainerPathStat, error) {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerStats(_ context.Context, _ string, _ bool) (types.ContainerStats, error) {
+func (m *DockerContainerClient) ContainerStats(_ context.Context, _ string, _ bool) (types.ContainerStats, error) {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerStatsOneShot(_ context.Context, _ string) (types.ContainerStats, error) {
+func (m *DockerContainerClient) ContainerStatsOneShot(_ context.Context, _ string) (types.ContainerStats, error) {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerStart(_ context.Context, _ string, _ types.ContainerStartOptions) error {
+func (m *DockerContainerClient) ContainerStart(_ context.Context, _ string, _ types.ContainerStartOptions) error {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerStop(_ context.Context, _ string, _ *time.Duration) error {
+func (m *DockerContainerClient) ContainerStop(_ context.Context, _ string, _ *time.Duration) error {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerTop(_ context.Context, _ string, _ []string) (container.ContainerTopOKBody, error) {
+func (m *DockerContainerClient) ContainerTop(_ context.Context, _ string, _ []string) (container.ContainerTopOKBody, error) {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerUnpause(_ context.Context, _ string) error {
+func (m *DockerContainerClient) ContainerUnpause(_ context.Context, _ string) error {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerUpdate(_ context.Context, _ string, _ container.UpdateConfig) (container.ContainerUpdateOKBody, error) {
+func (m *DockerContainerClient) ContainerUpdate(_ context.Context, _ string, _ container.UpdateConfig) (container.ContainerUpdateOKBody, error) {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainerWait(_ context.Context, _ string, _ container.WaitCondition) (<-chan container.ContainerWaitOKBody, <-chan error) {
+func (m *DockerContainerClient) ContainerWait(_ context.Context, _ string, _ container.WaitCondition) (<-chan container.ContainerWaitOKBody, <-chan error) {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) CopyFromContainer(_ context.Context, _ string, _ string) (io.ReadCloser, types.ContainerPathStat, error) {
+func (m *DockerContainerClient) CopyFromContainer(_ context.Context, _ string, _ string) (io.ReadCloser, types.ContainerPathStat, error) {
 	panic("not implemented!")
 }
 
 //nolint:lll // mock method
-func (m *ContainerAPIDockerClientMock) ContainersPrune(_ context.Context, _ filters.Args) (types.ContainersPruneReport, error) {
+func (m *DockerContainerClient) ContainersPrune(_ context.Context, _ filters.Args) (types.ContainersPruneReport, error) {
 	panic("not implemented!")
 }

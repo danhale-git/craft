@@ -124,8 +124,8 @@ func BuildImage() error {
 	return response.Body.Close()
 }
 
-// CheckImage returns true if the craft server image exists.
-func CheckImage(c client.ImageAPIClient) (bool, error) {
+// ImageExists returns true if the craft server image exists.
+func ImageExists(c client.ImageAPIClient) (bool, error) {
 	images, err := c.ImageList(context.Background(), docker.ImageListOptions{})
 	if err != nil {
 		return false, err
