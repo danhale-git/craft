@@ -189,7 +189,7 @@ func copyFiles(s *server.Server, f io.Writer, containerPrefix string, paths []st
 			return fmt.Errorf("copying data from server at '%s': %s", containerPath, err)
 		}
 
-		tr, err := tar.NewReader(data), nil
+		tr := tar.NewReader(data)
 
 		err = addTarToZip(p, tr, zw)
 		if err != nil {
