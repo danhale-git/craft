@@ -41,4 +41,4 @@ jobs:
           label="coverage"
           name="coverage"
 
-          sed -i "1s/^/\![$name]($url$label-$percentage%25-$color)\n/" README.md
+          sed -i "s/\!\[coverage\]\(.*\)/\![$name]($url$label-$percentage%25-$color)/g" README.md
