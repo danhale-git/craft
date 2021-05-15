@@ -19,26 +19,29 @@ jobs:
         uses: actions/checkout@v2
       - name: Calculate coverage and add to reamde.md
         run: |
-          percentage=$(go test ./... -v -covermode=count -coverprofile=coverage.out | tail -1 | sed 's/% of statements//g' | sed 's/coverage: //g' )
+          go test ./... -coverprofile cover.out
+          percentage=$(go tool cover -func cover.out | tail -1 | awk '{print$3}'| sed 's/%//g')
+
           n=$(echo $percentage | cut -c-3)
+
           if [ $n = "100" ]; then
-            color=brightgreen
-          else
-            n=$(echo $percentage | cut -c-2)
-            if [ $n -gt  75 ]; then
               color=brightgreen
-            elif [ $n -gt 50 ]; then
-              color=yellow
-            elif [ $n -gt 25 ]; then
-              color=orange
-            else
-              color=red
-            fi
+          else
+              n=$(echo $percentage | cut -c-2)
+              if [ $n -gt  75 ]; then
+                color=brightgreen
+              elif [ $n -gt 50 ]; then
+                color=yellow
+              elif [ $n -gt 25 ]; then
+                color=orange
+              else
+                color=red
+              fi
           fi
           echo $color
 
-          url="https:\/\/img.shields.io\/badge\/coverage"
+          url="https:\/\/img.shields.io\/badge\/"
           label="coverage"
           name="coverage"
 
-          sed -i "s/\!\[coverage\]\(.*\)/\![$name]($url$label-$percentage%25-$color)/g" README.md
+          sed "s/\!\[coverage\]\(.*\)/\![$name]($url$label-$percentage%25-$color)/g" README.md
