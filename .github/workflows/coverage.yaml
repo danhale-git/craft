@@ -45,8 +45,8 @@ jobs:
 
             sed "s/\!\[coverage\]\(.*\)/\![coverage]($url$badge_label-$percentage%25-$color)/g" README.md
 
-      - name: Commit
-          - uses: stefanzweifel/@v4
+      - name: Commit changes
+        uses: stefanzweifel/git-auto-commit-action@v4
 
   # do this: https://github.com/marketplace/actions/generate-update-markdown-content
   # https://www.edwardthomson.com/blog/github_actions_15_sharing_data_between_steps.html
