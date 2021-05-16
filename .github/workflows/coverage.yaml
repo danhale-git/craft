@@ -40,20 +40,12 @@ jobs:
             fi
             echo $color
 
-            url="https://img.shields.io/badge/"
-            label="coverage"
-            name="coverage"
+            url="https:\/\/img.shields.io\/badge\/"
+            badge_label="coverage"
 
+            sed "s/\!\[coverage\]\(.*\)/\![coverage]($url$badge_label-$percentage%25-$color)/g" README.md
 
-            #https://www.edwardthomson.com/blog/github_actions_15_sharing_data_between_steps.html
-
-            coverage_badge="![$name]($url$label-$percentage%25-$color)"
-
-            sed "s/\!\[coverage\]\(.*\)/$coverage_badge/g" README.md
-
-            git commit -m "Set coverage badge."
-
-            echo "set coverage line to '$coverage_badge'"
+            git commit -m "Set coverage badge"
 
       - name: Generate & update markdown content
         uses: muesli/readme-scribe@v0.1
