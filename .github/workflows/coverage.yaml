@@ -45,10 +45,8 @@ jobs:
 
             sed "s/\!\[coverage\]\(.*\)/\![coverage]($url$badge_label-$percentage%25-$color)/g" README.md
 
-            git commit -m "Set coverage badge"
-
-      - name: Generate & update markdown content
-        uses: muesli/readme-scribe@v0.1
+      - name: Commit
+          - uses: stefanzweifel/@v4
 
   # do this: https://github.com/marketplace/actions/generate-update-markdown-content
   # https://www.edwardthomson.com/blog/github_actions_15_sharing_data_between_steps.html
