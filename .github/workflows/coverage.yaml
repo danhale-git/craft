@@ -47,3 +47,4 @@ jobs:
         with:
           commit_message: Update coverage badge in README.md
           branch: master
+          file_pattern: README.md
