@@ -5,12 +5,17 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"path/filepath"
 	"strings"
 	"time"
+
+	docker "github.com/docker/docker/api/types"
+
+	"github.com/docker/docker/client"
 
 	"github.com/danhale-git/craft/internal/logger"
 	"github.com/danhale-git/craft/internal/server"
@@ -46,9 +51,9 @@ func FileTime(name string) (time.Time, error) {
 
 // Restore reads from the given zip.ReadCloser, copying each of the files to the directory containing the server
 // files.
-func Restore(zr *zip.Reader, copyToFunc func(string, *bytes.Buffer) error) error {
+func Restore(zr *zip.Reader, containerID string, dc client.ContainerAPIClient) error {
 	for _, f := range zr.File {
-		if err := restoreFile(f, server.Directory, copyToFunc); err != nil {
+		if err := restoreFile(f, server.Directory, containerID, dc); err != nil {
 			return fmt.Errorf("restoring %s: %s", f.Name, err)
 		}
 	}
@@ -57,9 +62,9 @@ func Restore(zr *zip.Reader, copyToFunc func(string, *bytes.Buffer) error) error
 }
 
 // Restore reads from the given zip.Reader, copying each of the files to the default world directory.
-func RestoreMCWorld(zr *zip.Reader, copyToFunc func(string, *bytes.Buffer) error) error {
+func RestoreMCWorld(zr *zip.Reader, containerID string, dc client.ContainerAPIClient) error {
 	for _, f := range zr.File {
-		if err := restoreFile(f, server.FullPaths.DefaultWorld, copyToFunc); err != nil {
+		if err := restoreFile(f, server.FullPaths.DefaultWorld, containerID, dc); err != nil {
 			return fmt.Errorf("restoring %s: %s", f.Name, err)
 		}
 	}
@@ -67,7 +72,7 @@ func RestoreMCWorld(zr *zip.Reader, copyToFunc func(string, *bytes.Buffer) error
 	return nil
 }
 
-func restoreFile(f *zip.File, dest string, copyToFunc func(string, *bytes.Buffer) error) error {
+func restoreFile(f *zip.File, dest string, containerID string, dc client.ContainerAPIClient) error {
 	var data bytes.Buffer
 	tw := tar.NewWriter(&data)
 
@@ -106,7 +111,13 @@ func restoreFile(f *zip.File, dest string, copyToFunc func(string, *bytes.Buffer
 		return err
 	}
 
-	return copyToFunc(filepath.Join(dest, dir), &data)
+	return dc.CopyToContainer(
+		context.Background(),
+		containerID,
+		filepath.Join(dest, dir),
+		&data,
+		docker.CopyToContainerOptions{},
+	)
 }
 
 // Copy runs the set of queries described in the bedrock server documentation for taking a backup without server

@@ -4,6 +4,7 @@ import (
 	"archive/tar"
 	"archive/zip"
 	"bufio"
+	"context"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -20,8 +21,6 @@ import (
 	"github.com/mitchellh/go-homedir"
 
 	"github.com/danhale-git/craft/internal/backup"
-
-	"github.com/danhale-git/craft/internal/docker"
 )
 
 const (
@@ -38,9 +37,9 @@ func serverFiles() []string {
 }
 
 // CopyBackup saves a backup to the default local directory.
-func CopyBackup(c *docker.Container) (string, error) {
-	backupPath := filepath.Join(backupDirectory(), c.ContainerName)
-	fileName := fmt.Sprintf("%s_%s.zip", c.ContainerName, time.Now().Format(backup.FileNameTimeLayout))
+func CopyBackup(s *server.Server) (string, error) {
+	backupPath := filepath.Join(backupDirectory(), s.ContainerName)
+	fileName := fmt.Sprintf("%s_%s.zip", s.ContainerName, time.Now().Format(backup.FileNameTimeLayout))
 	backupFilePath := path.Join(backupPath, fileName)
 
 	// Create the directory if it doesn't exist
@@ -58,13 +57,13 @@ func CopyBackup(c *docker.Container) (string, error) {
 	}
 
 	// Write to server CLI
-	cmd, err := c.CommandWriter()
+	cmd, err := s.CommandWriter()
 	if err != nil {
 		return "", err
 	}
 
 	// Read from server CLI
-	logs, err := c.LogReader(0)
+	logs, err := s.LogReader(0)
 	if err != nil {
 		return "", err
 	}
@@ -82,7 +81,7 @@ func CopyBackup(c *docker.Container) (string, error) {
 	paths = append(paths, serverFiles()...)
 
 	// Copy server files and write as zip data
-	if err = copyFiles(c, f, server.Directory, paths); err != nil {
+	if err = copyFiles(s, f, server.Directory, paths); err != nil {
 		if err := f.Close(); err != nil {
 			logger.Error.Printf("failed to close backup file after error")
 		}
@@ -103,7 +102,7 @@ func CopyBackup(c *docker.Container) (string, error) {
 }
 
 // Exports the server's current world to the given destination directory.
-func ExportMCWorld(c *docker.Container, dest string) error {
+func ExportMCWorld(s *server.Server, dest string) error {
 	if dest == "" {
 		dest = backupDirectory()
 	}
@@ -113,7 +112,7 @@ func ExportMCWorld(c *docker.Container, dest string) error {
 		return err
 	}
 
-	filePath := filepath.Join(dest, fmt.Sprintf("%s.mcworld", c.ContainerName))
+	filePath := filepath.Join(dest, fmt.Sprintf("%s.mcworld", s.ContainerName))
 
 	if !dir.Mode().IsDir() {
 		return fmt.Errorf("'%s' is not a directory", dest)
@@ -126,13 +125,13 @@ func ExportMCWorld(c *docker.Container, dest string) error {
 	}
 
 	// Write to server CLI
-	cmd, err := c.CommandWriter()
+	cmd, err := s.CommandWriter()
 	if err != nil {
 		return err
 	}
 
 	// Read from server CLI
-	logs, err := c.LogReader(0)
+	logs, err := s.LogReader(0)
 	if err != nil {
 		return err
 	}
@@ -148,7 +147,7 @@ func ExportMCWorld(c *docker.Container, dest string) error {
 	}
 
 	// Copy server files and write as zip data
-	if err = copyFiles(c, f, server.FullPaths.DefaultWorld, paths); err != nil {
+	if err = copyFiles(s, f, server.FullPaths.DefaultWorld, paths); err != nil {
 		if err := f.Close(); err != nil {
 			logger.Error.Printf("failed to close backup file after error")
 		}
@@ -174,15 +173,23 @@ cmd <server> save resume')`)
 	return nil
 }
 
-func copyFiles(c *docker.Container, f io.Writer, containerPrefix string, paths []string) error {
+func copyFiles(s *server.Server, f io.Writer, containerPrefix string, paths []string) error {
 	// Write zip data to out file
 	zw := zip.NewWriter(f)
 
 	for _, p := range paths {
-		tr, err := c.CopyFrom(filepath.Join(containerPrefix, p))
+		containerPath := filepath.Join(containerPrefix, p)
+
+		data, _, err := s.CopyFromContainer(
+			context.Background(),
+			s.ContainerID,
+			containerPath,
+		)
 		if err != nil {
-			return err
+			return fmt.Errorf("copying data from server at '%s': %s", containerPath, err)
 		}
+
+		tr := tar.NewReader(data)
 
 		err = addTarToZip(p, tr, zw)
 		if err != nil {
@@ -323,8 +330,8 @@ func backupDirectory() string {
 	return backupDir
 }
 
-func restoreBackup(d *docker.Container, backupName string) error {
-	backupPath := filepath.Join(backupDirectory(), d.ContainerName)
+func restoreBackup(s *server.Server, backupName string) error {
+	backupPath := filepath.Join(backupDirectory(), s.ContainerName)
 
 	// Open backup zip
 	zr, err := zip.OpenReader(filepath.Join(backupPath, backupName))
@@ -332,7 +339,7 @@ func restoreBackup(d *docker.Container, backupName string) error {
 		return err
 	}
 
-	if err = backup.Restore(&zr.Reader, d.CopyTo); err != nil {
+	if err = backup.Restore(&zr.Reader, s.ContainerID, dockerClient()); err != nil {
 		return err
 	}
 

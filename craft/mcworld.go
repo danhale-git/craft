@@ -6,20 +6,23 @@ import (
 	"path/filepath"
 )
 
+// ZipOpener returns a zip.ReadCloser containing world data.
 type ZipOpener interface {
 	Open() (*zip.ReadCloser, error)
 }
 
+// MCWorld is a .mcworld file
 type MCWorld struct {
 	Path string // The full path to a valid .mcworld zip file
 }
 
+// Open checks the zip file to validate the presence of leve.dat and levelname.txt before returning the opened
+// zip.Reader. The caller must close the zip.Reader.
 func (w MCWorld) Open() (*zip.ReadCloser, error) {
 	if err := w.check(); err != nil {
 		return nil, fmt.Errorf("invalid .mcworld file: %s", err)
 	}
 
-	// Open backup zip
 	zr, _ := zip.OpenReader(w.Path)
 
 	return zr, nil

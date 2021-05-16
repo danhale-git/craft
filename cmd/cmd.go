@@ -9,7 +9,6 @@ import (
 
 	"github.com/danhale-git/craft/craft"
 
-	"github.com/danhale-git/craft/internal/docker"
 	"github.com/danhale-git/craft/internal/logger"
 	"github.com/spf13/cobra"
 )
@@ -58,7 +57,7 @@ func NewRootCmd() *cobra.Command {
 
 			logger.Init(logPath, logLevel, fmt.Sprintf("[%s]", cmd.Name()))
 
-			ok, err := docker.CheckImage()
+			ok, err := craft.ImageExists(craft.NewClient())
 			if err != nil {
 				log.Fatalf("Error checking docker images: %s", err)
 			}
@@ -143,7 +142,7 @@ func NewCommandCmd() *cobra.Command {
 			return cobra.MinimumNArgs(2)(cmd, args)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			c := docker.GetContainerOrExit(args[0])
+			c := craft.GetServerOrExit(args[0])
 
 			logs, err := c.LogReader(0)
 			if err != nil {
@@ -228,7 +227,7 @@ func NewStopCmd() *cobra.Command {
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			stopped := make([]string, 0)
-			c := docker.GetContainerOrExit(args[0])
+			c := craft.GetServerOrExit(args[0])
 
 			if _, err := craft.CopyBackup(c); err != nil {
 				logger.Error.Fatalf("%s: error while taking backup: %s", c.ContainerName, err)
@@ -255,7 +254,7 @@ func NewLogsCmd() *cobra.Command {
 			return cobra.ExactArgs(1)(cmd, args)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			c := docker.GetContainerOrExit(args[0])
+			c := craft.GetServerOrExit(args[0])
 
 			tail, err := cmd.Flags().GetInt("tail")
 			if err != nil {
@@ -312,7 +311,7 @@ func NewConfigureCmd() *cobra.Command {
 			return cobra.RangeArgs(1, 1)(cmd, args)
 		},
 		Run: func(cmd *cobra.Command, args []string) {
-			c := docker.GetContainerOrExit(args[0])
+			c := craft.GetServerOrExit(args[0])
 
 			props, err := cmd.Flags().GetStringSlice("prop")
 			if err != nil {
@@ -347,7 +346,7 @@ func NewExportCommand() *cobra.Command {
 			}
 
 			err = craft.ExportMCWorld(
-				docker.GetContainerOrExit(args[0]),
+				craft.GetServerOrExit(args[0]),
 				dir,
 			)
 			if err != nil {
@@ -369,7 +368,7 @@ func NewBuildCommand() *cobra.Command {
 		Short: "Build the server image.",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
-			if err := docker.BuildImage(); err != nil {
+			if err := craft.BuildImage(); err != nil {
 				log.Fatalf("Error building image: %s", err)
 			}
 		},

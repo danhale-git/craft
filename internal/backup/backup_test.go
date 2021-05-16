@@ -1,16 +1,17 @@
 package backup
 
 import (
-	"archive/tar"
 	"archive/zip"
 	"bufio"
 	"bytes"
 	"fmt"
-	"io"
-	"path"
 	"sort"
 	"testing"
 	"time"
+
+	"github.com/danhale-git/craft/internal/mock"
+
+	"github.com/docker/docker/client"
 
 	"github.com/danhale-git/craft/internal/logger"
 )
@@ -95,42 +96,15 @@ func TestRestore(t *testing.T) {
 	}
 }
 
-func testRestoreFunc(z *zip.Reader, restoreFunc func(*zip.Reader, func(string, *bytes.Buffer) error) error) ([]string, error) { //nolint:lll
-	fileNames := make([]string, len(z.File))
+func testRestoreFunc(z *zip.Reader, restoreFunc func(*zip.Reader, string, client.ContainerAPIClient) error) ([]string, error) { //nolint:lll
+	mockClient := &mock.DockerContainerClient{}
+	mockClient.CopyToFileNames = make([]string, 0)
 
-	count := 0
-	copyToFunc := func(dest string, buf *bytes.Buffer) error {
-		// Open and iterate through the files in the tar archive
-		tr := tar.NewReader(buf)
-
-		for {
-			hdr, err := tr.Next()
-			if err == io.EOF {
-				break // End of archive
-			}
-
-			if err != nil {
-				logger.Error.Fatal(err)
-			}
-
-			fileNames[count] = path.Join(dest, hdr.Name)
-		}
-
-		// count the number of files copies
-		count++
-
-		return nil
-	}
-
-	if err := restoreFunc(z, copyToFunc); err != nil {
+	if err := restoreFunc(z, "", mockClient); err != nil {
 		return nil, fmt.Errorf("error returned when calling with valid input: %s", err)
 	}
 
-	if count != len(z.File) {
-		return nil, fmt.Errorf("unexpected count of copyToFunc calls, count %d: want %d", count, len(z.File))
-	}
-
-	return fileNames, nil
+	return mockClient.CopyToFileNames, nil
 }
 
 func mockZip(files map[string]string) *zip.Reader {
