@@ -361,7 +361,7 @@ func NewExportCommand() *cobra.Command {
 	return command
 }
 
-// NewExportCommand returns the version command which prints the current craft version
+// NewBuildCommand returns the build command which builds the server container image
 func NewBuildCommand() *cobra.Command {
 	command := &cobra.Command{
 		Use:   "build",

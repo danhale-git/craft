@@ -150,7 +150,7 @@ func RunLatestBackup(name string, port int) (*server.Server, error) {
 	return c, nil
 }
 
-// runServer executes the server binary and waits for the server to be ready before returning.
+// RunServer executes the server binary and waits for the server to be ready before returning.
 func RunServer(s *server.Server) error {
 	// Run the bedrock_server process
 	if err := s.Command(strings.Split(RunMCCommand, " ")); err != nil {

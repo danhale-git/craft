@@ -36,7 +36,7 @@ func serverFiles() []string {
 	}
 }
 
-// CopyBackup saves a backup to the default local directory.
+// CopyBackup copies the server world files to the server backup directory.
 func CopyBackup(s *server.Server) (string, error) {
 	backupPath := filepath.Join(backupDirectory(), s.ContainerName)
 	fileName := fmt.Sprintf("%s_%s.zip", s.ContainerName, time.Now().Format(backup.FileNameTimeLayout))
@@ -101,7 +101,8 @@ func CopyBackup(s *server.Server) (string, error) {
 	return fileName, nil
 }
 
-// Exports the server's current world to the given destination directory.
+// ExportMCWorld copies the server's current world files to a zipped .mcworld file at the given destination which must
+// be a directory.
 func ExportMCWorld(s *server.Server, dest string) error {
 	if dest == "" {
 		dest = backupDirectory()

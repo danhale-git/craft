@@ -70,7 +70,6 @@ func (m *DockerContainerClient) ContainerList(_ context.Context, _ types.Contain
 	return containers, nil
 }
 
-// func (cli *Client) CopyToContainer(ctx context.Context, containerID, dstPath string, content io.Reader, options types.CopyToContainerOptions) error {
 //nolint:lll // mock method
 func (m *DockerContainerClient) CopyToContainer(_ context.Context, _ string, dstPath string, r io.Reader, _ types.CopyToContainerOptions) error {
 	if m.CopyToFileNames == nil {
