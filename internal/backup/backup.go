@@ -61,7 +61,7 @@ func Restore(zr *zip.Reader, containerID string, dc client.ContainerAPIClient) e
 	return nil
 }
 
-// Restore reads from the given zip.Reader, copying each of the files to the default world directory.
+// RestoreMCWorld reads from the given zip.Reader, copying each of the files to the default world directory.
 func RestoreMCWorld(zr *zip.Reader, containerID string, dc client.ContainerAPIClient) error {
 	for _, f := range zr.File {
 		if err := restoreFile(f, server.FullPaths.DefaultWorld, containerID, dc); err != nil {
@@ -120,9 +120,9 @@ func restoreFile(f *zip.File, dest string, containerID string, dc client.Contain
 	)
 }
 
-// Copy runs the set of queries described in the bedrock server documentation for taking a backup without server
-// interruption. All files needed for server and world persistence are copied from the server to a local zip file. The
-// paths in the zip file extend to the server directory root.
+// SaveHoldQuery runs the `save hold` bedrock server command. It then repeatedly runs the `save query` command.
+// When the server is ready for world files to be copied, a list of suggested files to back up is returned. SaveResume
+// must be run after SaveHoldQuery.
 func SaveHoldQuery(command io.Writer, logs *bufio.Reader) ([]string, error) {
 	// `save hold`
 	runCommand("save hold", command, logs)
@@ -157,6 +157,8 @@ func SaveHoldQuery(command io.Writer, logs *bufio.Reader) ([]string, error) {
 	return nil, fmt.Errorf("exceeded %d retries of the 'save query' command", saveQueryRetries)
 }
 
+// SaveResume runs the `save resume` bedrock server command and validates the successful response. It must be run after
+// after every call to SaveHoldQuery.
 func SaveResume(command io.Writer, logs *bufio.Reader) error {
 	// `save resume`
 	runCommand("save resume", command, logs)
