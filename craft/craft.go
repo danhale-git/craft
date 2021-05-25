@@ -110,7 +110,7 @@ func CreateServer(name string, port int, props []string, mcworld ZipOpener) erro
 	return nil
 }
 
-// RunLatestBackup sorts all available backup files per date and starts a server from the latest backup.
+// RunLatestBackup sorts all available backup files by date and starts a server from the latest backup.
 func RunLatestBackup(name string, port int) (*server.Server, error) {
 	if _, err := server.New(NewClient(), name); err == nil {
 		return nil, fmt.Errorf("server '%s' is already running (run `craft list`)", name)
@@ -150,7 +150,7 @@ func RunLatestBackup(name string, port int) (*server.Server, error) {
 	return c, nil
 }
 
-// runServer executes the server binary and waits for the server to be ready before returning.
+// RunServer executes the server binary and waits for the server to be ready before returning.
 func RunServer(s *server.Server) error {
 	// Run the bedrock_server process
 	if err := s.Command(strings.Split(RunMCCommand, " ")); err != nil {
