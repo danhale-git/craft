@@ -15,9 +15,7 @@ func NewStopCmd() *cobra.Command {
 		Use:   "stop <servers...>",
 		Short: "Back up and stop a running server.",
 		Long:  `Back up the server then stop it. If the backup process fails, the server will not be stopped. `,
-		Args: func(cmd *cobra.Command, args []string) error {
-			return cobra.ExactArgs(1)(cmd, args)
-		},
+		Args:  cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			stopped := make([]string, 0)
 

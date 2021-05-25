@@ -18,9 +18,7 @@ func NewStartCmd() *cobra.Command {
 
 If no port flag is provided, the lowest available (unused by docker) port between 19132 and 19232 will be used.
 If multiple arguments are provided, the --port flag is ignored and ports are assigned automatically.`,
-		Args: func(cmd *cobra.Command, args []string) error {
-			return cobra.ExactArgs(1)(cmd, args)
-		},
+		Args: cobra.MinimumNArgs(1),
 		Run: func(cmd *cobra.Command, args []string) {
 			started := make([]string, 0)
 

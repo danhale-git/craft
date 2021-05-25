@@ -30,10 +30,8 @@ Linux cron (hourly):
 	--skip-trim-file-removal-check --trim 3 \ # skip cmdline prompts and delete all except 3 newest files
 	--log ~/craft_backups/backup.log --log-level info # log to file with log level info
 `,
-		Args: func(cmd *cobra.Command, args []string) error {
-			return cobra.MinimumNArgs(1)(cmd, args)
-		},
-		Run: backupCommand,
+		Args: cobra.MinimumNArgs(1),
+		Run:  backupCommand,
 	}
 
 	backupCmd.Flags().IntP("trim", "t", 0,
