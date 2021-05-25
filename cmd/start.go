@@ -39,7 +39,8 @@ If multiple arguments are provided, the --port flag is ignored and ports are ass
 			for _, name := range args {
 				_, err := craft.RunLatestBackup(name, port)
 				if err != nil {
-					logger.Error.Fatal(err)
+					logger.Error.Println(err)
+					continue
 				}
 
 				started = append(started, name)

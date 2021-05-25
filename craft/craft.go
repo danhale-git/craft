@@ -110,7 +110,7 @@ func CreateServer(name string, port int, props []string, mcworld ZipOpener) erro
 	return nil
 }
 
-// RunLatestBackup sorts all available backup files per date and starts a server from the latest backup.
+// RunLatestBackup sorts all available backup files by date and starts a server from the latest backup.
 func RunLatestBackup(name string, port int) (*server.Server, error) {
 	if _, err := server.New(NewClient(), name); err == nil {
 		return nil, fmt.Errorf("server '%s' is already running (run `craft list`)", name)

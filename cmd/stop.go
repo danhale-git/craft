@@ -20,17 +20,22 @@ func NewStopCmd() *cobra.Command {
 		},
 		Run: func(cmd *cobra.Command, args []string) {
 			stopped := make([]string, 0)
-			c := craft.GetServerOrExit(args[0])
 
-			if _, err := craft.CopyBackup(c); err != nil {
-				logger.Error.Fatalf("%s: error while taking backup: %s", c.ContainerName, err)
+			for _, name := range args {
+
+				c := craft.GetServerOrExit(name)
+
+				if _, err := craft.CopyBackup(c); err != nil {
+					logger.Error.Printf("%s: error while taking backup: %s", c.ContainerName, err)
+					continue
+				}
+
+				if err := craft.Stop(c); err != nil {
+					logger.Error.Printf("%s: stopping server: %s", c.ContainerName, err)
+					continue
+				}
+				stopped = append(stopped, c.ContainerName)
 			}
-
-			if err := craft.Stop(c); err != nil {
-				logger.Error.Fatalf("%s: stopping server: %s", c.ContainerName, err)
-			}
-			stopped = append(stopped, c.ContainerName)
-
 			logger.Info.Println("stopped:", strings.Join(stopped, " "))
 		},
 	}

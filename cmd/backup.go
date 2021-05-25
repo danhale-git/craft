@@ -68,7 +68,8 @@ func backupCommand(cmd *cobra.Command, args []string) {
 		// Take a new backup
 		name, err := craft.CopyBackup(c)
 		if err != nil {
-			logger.Error.Fatalf("%s: taking backup: %s", c.ContainerName, err)
+			logger.Error.Printf("%s: taking backup: %s", c.ContainerName, err)
+			continue
 		}
 
 		created = append(created, name)
@@ -77,6 +78,7 @@ func backupCommand(cmd *cobra.Command, args []string) {
 			del, err := craft.TrimBackups(c.ContainerName, trim, skip)
 			if err != nil {
 				logger.Error.Printf("%s: trimming old backup files: %s", c.ContainerName, err)
+				continue
 			}
 
 			deleted = append(deleted, del...)
