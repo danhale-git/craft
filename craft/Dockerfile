@@ -2,6 +2,10 @@
 
 FROM ubuntu
 
+# https://www.minecraft.net/en-us/download/server/bedrock > UBUNTU SERVER > DOWNLOAD
+# example: https://minecraft.azureedge.net/bin-linux/bedrock-server-1.16.221.01.zip
+ARG URL
+
 RUN mkdir bedrock; cd bedrock; \
     echo 'debconf debconf/frontend select Noninteractive' | debconf-set-selections; \
     apt-get update; \
@@ -9,10 +13,9 @@ RUN mkdir bedrock; cd bedrock; \
     apt-get install -y unzip; \
     apt-get install -y libcurl4
 
-# https://www.minecraft.net/en-us/download/server/bedrock
 RUN cd bedrock; \
-    wget https://minecraft.azureedge.net/bin-linux/bedrock-server-1.16.220.02.zip; \
-    unzip bedrock-server-1.16.220.02.zip; \
+    wget $URL; \
+    unzip $(echo $URL  | cut -d "/" -f5); \
     chmod +x bedrock_server
 
 RUN mkdir bedrock/worlds; \

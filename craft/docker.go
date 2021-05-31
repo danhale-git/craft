@@ -26,10 +26,10 @@ import (
 )
 
 const (
-	anyIP       = "0.0.0.0"                      // Refers to any/all IPv4 addresses
-	defaultPort = 19132                          // Default port for player connections
-	protocol    = "UDP"                          // MC uses UDP
-	imageName   = "danhaledocker/craftmine:v1.9" // The name of the docker image to use
+	anyIP       = "0.0.0.0"                        // Refers to any/all IPv4 addresses
+	defaultPort = 19132                            // Default port for player connections
+	protocol    = "UDP"                            // MC uses UDP
+	imageName   = "craft_bedrock_server:autobuild" // The name of the docker image to use
 )
 
 func NewClient() *client.Client {
@@ -78,7 +78,7 @@ func AllServers(c client.ContainerAPIClient) ([]*server.Server, error) {
 var dockerfile []byte //nolint:gochecknoglobals // embed needs a global
 
 // BuildImage builds the server image.
-func BuildImage() error {
+func BuildImage(serverURL string) error {
 	c := NewClient()
 
 	var buf bytes.Buffer
@@ -108,6 +108,9 @@ func BuildImage() error {
 		docker.ImageBuildOptions{
 			Dockerfile: "Dockerfile",
 			Tags:       []string{imageName},
+			BuildArgs: map[string]*string{
+				"URL": &serverURL,
+			},
 		},
 	)
 
