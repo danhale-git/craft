@@ -6,7 +6,7 @@ import (
 	"net/url"
 	"regexp"
 
-	"github.com/danhale-git/craft/craft"
+	"github.com/danhale-git/craft/internal/server"
 
 	"github.com/danhale-git/craft/internal/logger"
 
@@ -41,7 +41,7 @@ func NewBuildCommand() *cobra.Command {
 				logger.Error.Fatalf("error parsing url: %s", err)
 			}
 
-			if err := craft.BuildImage(u.String()); err != nil {
+			if err := server.BuildDockerImage(u.String()); err != nil {
 				logger.Error.Fatalf("Error building image: %s", err)
 			}
 		},

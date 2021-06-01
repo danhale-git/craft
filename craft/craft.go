@@ -42,7 +42,7 @@ func dockerClient() *client.Client {
 // GetServerOrExit is a convenience function for attempting to find an existing docker container with the given name.
 // If not found, a helpful error message is printed and the program exits without error.
 func GetServerOrExit(containerName string) *server.Server {
-	s, err := server.New(NewClient(), containerName)
+	s, err := server.New(server.DockerClient(), containerName)
 
 	if err != nil {
 		// Container was not found
@@ -72,7 +72,7 @@ func CreateServer(name string, port int, props []string, mcworld ZipOpener) erro
 	}
 
 	// Create a container for the server
-	c, err := RunContainer(port, name)
+	c, err := server.Run(port, name)
 	if err != nil {
 		return fmt.Errorf("creating new container: %s", err)
 	}
@@ -103,7 +103,7 @@ func CreateServer(name string, port int, props []string, mcworld ZipOpener) erro
 	}
 
 	// Run the server process
-	if err = RunServer(c); err != nil {
+	if err = runBedrock(c); err != nil {
 		return fmt.Errorf("starting server process: %s", err)
 	}
 
@@ -112,7 +112,7 @@ func CreateServer(name string, port int, props []string, mcworld ZipOpener) erro
 
 // RunLatestBackup sorts all available backup files by date and starts a server from the latest backup.
 func RunLatestBackup(name string, port int) (*server.Server, error) {
-	if _, err := server.New(NewClient(), name); err == nil {
+	if _, err := server.New(server.DockerClient(), name); err == nil {
 		return nil, fmt.Errorf("server '%s' is already running (run `craft list`)", name)
 	}
 
@@ -120,7 +120,7 @@ func RunLatestBackup(name string, port int) (*server.Server, error) {
 		return nil, fmt.Errorf("stopped server with name '%s' doesn't exist", name)
 	}
 
-	c, err := RunContainer(port, name)
+	c, err := server.Run(port, name)
 	if err != nil {
 		return nil, fmt.Errorf("%s: running server: %s", name, err)
 	}
@@ -139,7 +139,7 @@ func RunLatestBackup(name string, port int) (*server.Server, error) {
 		return nil, fmt.Errorf("%s: loading backup file to server: %s", name, err)
 	}
 
-	if err = RunServer(c); err != nil {
+	if err = runBedrock(c); err != nil {
 		if err := stopServer(c); err != nil {
 			panic(err)
 		}
@@ -150,8 +150,7 @@ func RunLatestBackup(name string, port int) (*server.Server, error) {
 	return c, nil
 }
 
-// RunServer executes the server binary and waits for the server to be ready before returning.
-func RunServer(s *server.Server) error {
+func runBedrock(s *server.Server) error {
 	// Run the bedrock_server process
 	if err := s.Command(strings.Split(RunMCCommand, " ")); err != nil {
 		return err
@@ -273,18 +272,18 @@ func SetServerProperties(propFlags []string, s *server.Server) error {
 func PrintServers(all bool) error {
 	w := tabwriter.NewWriter(os.Stdout, 3, 3, 3, ' ', tabwriter.TabIndent)
 
-	servers, err := AllServers(NewClient())
+	servers, err := server.All(server.DockerClient())
 	if err != nil {
 		return fmt.Errorf("getting server clients: %s", err)
 	}
 
 	for _, s := range servers {
-		s, err := server.New(NewClient(), s.ContainerName)
+		s, err := server.New(server.DockerClient(), s.ContainerName)
 		if err != nil {
 			return fmt.Errorf("creating docker client: %s", err)
 		}
 
-		port, err := getPort(s)
+		port, err := server.GetPort(s)
 		if err != nil {
 			return fmt.Errorf("getting port for container '%s': '%s'", s.ContainerName, err)
 		}
