@@ -40,9 +40,14 @@ If no port flag is provided, the lowest available (unused by docker) port betwee
 				mcwFile = craft.MCWorld{Path: mcworld}
 			}
 
-			err = craft.CreateServer(args[0], port, props, mcwFile)
+			c, err := craft.NewServer(args[0], port, props, mcwFile)
 			if err != nil {
 				logger.Error.Fatalf("creating server: %s", err)
+			}
+
+			// Run the server process
+			if err = craft.RunBedrock(c); err != nil {
+				logger.Error.Fatalf("starting server process: %s", err)
 			}
 		},
 	}

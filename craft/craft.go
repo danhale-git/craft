@@ -55,41 +55,39 @@ func GetServerOrExit(containerName string) *server.Server {
 		}
 
 		// Something else went wrong
-		panic(err)
+		logger.Error.Panic(err)
 	}
 
 	return s
 }
 
-// CreateServer spawns a new craft server. Only the name is required. Full path to a .mcworld file, port and a slice of
+// NewServer spawns a new craft server. Only the name is required. Full path to a .mcworld file, port and a slice of
 // "property=newvalue" strings may also be provided.
-func CreateServer(name string, port int, props []string, mcworld ZipOpener) error {
+func NewServer(name string, port int, props []string, mcworld ZipOpener) (*server.Server, error) {
 	// Check the server doesn't already exist
 	for _, b := range backupServerNames() {
 		if name == b {
-			return fmt.Errorf("server name '%s' is in use by a backup, run 'craft list -a'", name)
+			return nil, fmt.Errorf("server name '%s' is in use by a backup, run 'craft list -a'", name)
 		}
 	}
 
 	// Create a container for the server
 	c, err := server.Run(port, name)
 	if err != nil {
-		return fmt.Errorf("creating new container: %s", err)
+		return nil, fmt.Errorf("creating new container: %s", err)
 	}
 
 	// Copy world files to the server
 	if mcworld != nil {
 		zr, err := mcworld.Open()
 		if err != nil {
-			if err := stopServer(c); err != nil {
-				logger.Panic(err)
-			}
-
-			return fmt.Errorf("inavlid world file: %s", err)
+			stopServerOrPanic(c)
+			return nil, fmt.Errorf("inavlid world file: %s", err)
 		}
 
 		if err = backup.RestoreMCWorld(&zr.Reader, c.ContainerID, dockerClient()); err != nil {
-			return fmt.Errorf("restoring backup: %s", err)
+			stopServerOrPanic(c)
+			return nil, fmt.Errorf("restoring backup: %s", err)
 		}
 
 		if err = zr.Close(); err != nil {
@@ -99,19 +97,14 @@ func CreateServer(name string, port int, props []string, mcworld ZipOpener) erro
 
 	// Set the properties
 	if err := SetServerProperties(props, c); err != nil {
-		return fmt.Errorf("setting server properties: %s", err)
+		return nil, fmt.Errorf("setting server properties: %s", err)
 	}
 
-	// Run the server process
-	if err = runBedrock(c); err != nil {
-		return fmt.Errorf("starting server process: %s", err)
-	}
-
-	return nil
+	return c, nil
 }
 
-// RunLatestBackup sorts all available backup files by date and starts a server from the latest backup.
-func RunLatestBackup(name string, port int) (*server.Server, error) {
+// StartServer sorts all available backup files by date and starts a server from the latest backup.
+func StartServer(name string, port int) (*server.Server, error) {
 	if _, err := server.New(server.DockerClient(), name); err == nil {
 		return nil, fmt.Errorf("server '%s' is already running (run `craft list`)", name)
 	}
@@ -127,37 +120,31 @@ func RunLatestBackup(name string, port int) (*server.Server, error) {
 
 	f, err := latestBackupFile(name)
 	if err != nil {
+		stopServerOrPanic(c)
 		return nil, err
 	}
 
 	err = restoreBackup(c, f.Name())
 	if err != nil {
-		if err := stopServer(c); err != nil {
-			panic(err)
-		}
-
+		stopServerOrPanic(c)
 		return nil, fmt.Errorf("%s: loading backup file to server: %s", name, err)
-	}
-
-	if err = runBedrock(c); err != nil {
-		if err := stopServer(c); err != nil {
-			panic(err)
-		}
-
-		return nil, fmt.Errorf("%s: starting server process: %s", name, err)
 	}
 
 	return c, nil
 }
 
-func runBedrock(s *server.Server) error {
+// RunBedrock runs the bedrock server process and waits for confirmation from the server that the process has started.
+// The server should be join-able when this function returns.
+func RunBedrock(s *server.Server) error {
 	// Run the bedrock_server process
 	if err := s.Command(strings.Split(RunMCCommand, " ")); err != nil {
+		stopServerOrPanic(s)
 		return err
 	}
 
 	logs, err := s.LogReader(-1) // Negative number results in all logs
 	if err != nil {
+		stopServerOrPanic(s)
 		return err
 	}
 
@@ -181,14 +168,24 @@ func Stop(s *server.Server) error {
 		return fmt.Errorf("%s: running 'stop' command in server cli to stop server process: %s", s.ContainerName, err)
 	}
 
-	if err := stopServer(s); err != nil {
+	logger.Info.Printf("stopping %s\n", s.ContainerName)
+
+	timeout := time.Duration(stopTimeout)
+
+	err := s.ContainerStop(
+		context.Background(),
+		s.ContainerID,
+		&timeout,
+	)
+
+	if err != nil {
 		return fmt.Errorf("%s: stopping docker container: %s", s.ContainerName, err)
 	}
 
 	return nil
 }
 
-// SetServerProperties takes a collection of key=value pairs and applies them to the server.properties configuration
+// SetServerProperties takes a slice of key=value strings and applies them to the server.properties configuration
 // file. If a key is missing, an error will be returned and no changes will be made.
 func SetServerProperties(propFlags []string, s *server.Server) error {
 	if len(propFlags) > 0 {
@@ -335,14 +332,18 @@ func PrintServers(all bool) error {
 	return nil
 }
 
-func stopServer(s *server.Server) error {
+func stopServerOrPanic(s *server.Server) {
 	logger.Info.Printf("stopping %s\n", s.ContainerName)
 
 	timeout := time.Duration(stopTimeout)
 
-	return s.ContainerStop(
+	err := s.ContainerStop(
 		context.Background(),
 		s.ContainerID,
 		&timeout,
 	)
+
+	if err != nil {
+		logger.Error.Panicf("while stopping %s another error occurred: %s\n", s.ContainerName, err)
+	}
 }
