@@ -118,8 +118,8 @@ func Get(cl client.ContainerAPIClient, containerName string) (*Server, error) {
 }
 
 // Command attaches to the container and runs the given arguments separated by spaces.
-func (c *Server) Command(args []string) error {
-	conn, err := c.CommandWriter()
+func (s *Server) Command(args []string) error {
+	conn, err := s.CommandWriter()
 	if err != nil {
 		return err
 	}
@@ -135,10 +135,10 @@ func (c *Server) Command(args []string) error {
 }
 
 // CommandWriter returns a *net.Conn which streams to the container process stdin.
-func (c *Server) CommandWriter() (net.Conn, error) {
-	waiter, err := c.ContainerAttach(
+func (s *Server) CommandWriter() (net.Conn, error) {
+	waiter, err := s.ContainerAttach(
 		context.Background(),
-		c.ContainerID,
+		s.ContainerID,
 		docker.ContainerAttachOptions{
 			Stdin:  true,
 			Stream: true,
@@ -153,10 +153,10 @@ func (c *Server) CommandWriter() (net.Conn, error) {
 
 // LogReader returns a buffer with the stdout and stderr from the running mc server process. New output will continually
 // be sent to the buffer. A negative tail value will result in the 'all' value being used.
-func (c *Server) LogReader(tail int) (*bufio.Reader, error) {
-	logs, err := c.ContainerLogs(
+func (s *Server) LogReader(tail int) (*bufio.Reader, error) {
+	logs, err := s.ContainerLogs(
 		context.Background(),
-		c.ContainerID,
+		s.ContainerID,
 		docker.ContainerLogsOptions{
 			ShowStdout: true,
 			ShowStderr: true,
@@ -170,6 +170,70 @@ func (c *Server) LogReader(tail int) (*bufio.Reader, error) {
 	}
 
 	return bufio.NewReader(logs), nil
+}
+
+// Port returns the port players use to connect to this server.
+func (s *Server) Port() (int, error) {
+	cj, err := s.ContainerInspect(context.Background(), s.ContainerID)
+	if err != nil {
+		return 0, err
+	}
+
+	portBindings := cj.HostConfig.PortBindings
+
+	if len(portBindings) == 0 {
+		return 0, fmt.Errorf("no ports bound for container %s", s.ContainerName)
+	}
+
+	var port int
+
+	for _, v := range portBindings {
+		p, err := strconv.Atoi(v[0].HostPort)
+		if err != nil {
+			return 0, fmt.Errorf("error reading container port: %s", err)
+		}
+
+		port = p
+	}
+
+	if port == 0 {
+		panic("port is 0")
+	}
+
+	return port, nil
+}
+
+// All returns a client for each active server.
+func All(c client.ContainerAPIClient) ([]*Server, error) {
+	containers, err := c.ContainerList(
+		context.Background(),
+		docker.ContainerListOptions{},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("listing docker containers: %s", err)
+	}
+
+	names := make([]string, len(containers))
+	for i, c := range containers {
+		names[i] = strings.Replace(c.Names[0], "/", "", 1)
+	}
+
+	servers := make([]*Server, 0)
+
+	for _, n := range names {
+		s, err := Get(c, n)
+		if err != nil {
+			if _, ok := err.(*NotCraftError); ok {
+				continue
+			}
+
+			return nil, fmt.Errorf("creating client for container '%s': %s", n, err)
+		}
+
+		servers = append(servers, s)
+	}
+
+	return servers, nil
 }
 
 func containerID(name string, client client.ContainerAPIClient) (string, error) {

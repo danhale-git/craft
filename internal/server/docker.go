@@ -6,8 +6,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strconv"
-	"strings"
 
 	"github.com/moby/term"
 
@@ -35,70 +33,6 @@ func DockerClient() *client.Client {
 	}
 
 	return c
-}
-
-// All returns a client for each active server.
-func All(c client.ContainerAPIClient) ([]*Server, error) {
-	containers, err := c.ContainerList(
-		context.Background(),
-		docker.ContainerListOptions{},
-	)
-	if err != nil {
-		return nil, fmt.Errorf("listing docker containers: %s", err)
-	}
-
-	names := make([]string, len(containers))
-	for i, c := range containers {
-		names[i] = strings.Replace(c.Names[0], "/", "", 1)
-	}
-
-	servers := make([]*Server, 0)
-
-	for _, n := range names {
-		s, err := Get(c, n)
-		if err != nil {
-			if _, ok := err.(*NotCraftError); ok {
-				continue
-			}
-
-			return nil, fmt.Errorf("creating client for container '%s': %s", n, err)
-		}
-
-		servers = append(servers, s)
-	}
-
-	return servers, nil
-}
-
-// GetPort returns the port players use to connect to this server.
-func GetPort(s *Server) (int, error) {
-	cj, err := s.ContainerInspect(context.Background(), s.ContainerID)
-	if err != nil {
-		return 0, err
-	}
-
-	portBindings := cj.HostConfig.PortBindings
-
-	if len(portBindings) == 0 {
-		return 0, fmt.Errorf("no ports bound for container %s", s.ContainerName)
-	}
-
-	var port int
-
-	for _, v := range portBindings {
-		p, err := strconv.Atoi(v[0].HostPort)
-		if err != nil {
-			return 0, fmt.Errorf("error reading container port: %s", err)
-		}
-
-		port = p
-	}
-
-	if port == 0 {
-		panic("port is 0")
-	}
-
-	return port, nil
 }
 
 // DockerImageExists returns true if the craft server image exists.
@@ -187,7 +121,7 @@ func nextAvailablePort() int {
 	usedPorts := make([]int, len(servers))
 
 	for i, s := range servers {
-		p, err := GetPort(s)
+		p, err := s.Port()
 		if err != nil {
 			panic(err)
 		}

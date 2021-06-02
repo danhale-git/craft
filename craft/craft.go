@@ -295,7 +295,7 @@ func PrintServers(all bool) error {
 			return fmt.Errorf("creating docker client: %s", err)
 		}
 
-		port, err := server.GetPort(s)
+		port, err := s.Port()
 		if err != nil {
 			return fmt.Errorf("getting port for container '%s': '%s'", s.ContainerName, err)
 		}
