@@ -5,7 +5,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/danhale-git/craft/internal/server"
+	"github.com/danhale-git/craft/craft"
 
 	"github.com/danhale-git/craft/internal/logger"
 	"github.com/spf13/cobra"
@@ -56,7 +56,7 @@ func NewRootCmd() *cobra.Command {
 
 			logger.Init(logPath, logLevel, fmt.Sprintf("[%s]", cmd.Name()))
 
-			ok, err := server.DockerImageExists(server.DockerClient())
+			ok, err := craft.DockerImageExists(craft.DockerClient())
 			if err != nil {
 				log.Fatalf("Error checking docker images: %s", err)
 			}

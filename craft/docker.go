@@ -1,4 +1,4 @@
-package server
+package craft
 
 import (
 	"archive/tar"
@@ -20,10 +20,7 @@ import (
 )
 
 const (
-	anyIP       = "0.0.0.0"                        // Refers to any/all IPv4 addresses
-	defaultPort = 19132                            // Default port for player connections
-	protocol    = "UDP"                            // MC uses UDP
-	imageName   = "craft_bedrock_server:autobuild" // The name of the docker image to use
+	ImageName = "craft_bedrock_server:autobuild" // The name of the docker image to use
 )
 
 func DockerClient() *client.Client {
@@ -43,7 +40,7 @@ func DockerImageExists(c client.ImageAPIClient) (bool, error) {
 	}
 
 	for _, img := range images {
-		if len(img.RepoTags) > 0 && img.RepoTags[0] == imageName {
+		if len(img.RepoTags) > 0 && img.RepoTags[0] == ImageName {
 			return true, nil
 		}
 	}
@@ -82,7 +79,7 @@ func BuildDockerImage(serverURL string) error {
 		&buf,
 		docker.ImageBuildOptions{
 			Dockerfile: "Dockerfile",
-			Tags:       []string{imageName},
+			Tags:       []string{ImageName},
 			BuildArgs: map[string]*string{
 				"URL": &serverURL,
 			},
@@ -108,40 +105,4 @@ func BuildDockerImage(serverURL string) error {
 	}
 
 	return response.Body.Close()
-}
-
-// nextAvailablePort returns the next available port, starting with the default mc port. It checks the first exposed
-// port of all running containers to determine if a port is in use.
-func nextAvailablePort() int {
-	servers, err := All(DockerClient())
-	if err != nil {
-		panic(err)
-	}
-
-	usedPorts := make([]int, len(servers))
-
-	for i, s := range servers {
-		p, err := s.Port()
-		if err != nil {
-			panic(err)
-		}
-
-		usedPorts[i] = p
-	}
-
-	// Iterate 100 ports starting with the default
-OUTER:
-	for p := defaultPort; p < defaultPort+100; p++ {
-		for _, up := range usedPorts {
-			if p == up {
-				// Another server is using this port
-				continue OUTER
-			}
-		}
-
-		// The port is available
-		return p
-	}
-
-	panic("100 ports were not available")
 }

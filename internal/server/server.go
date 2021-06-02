@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/danhale-git/craft/craft"
+
 	"github.com/danhale-git/craft/internal/logger"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
@@ -16,7 +18,12 @@ import (
 	"github.com/docker/docker/client"
 )
 
-const CraftLabel = "danhale-git/craft"
+const (
+	craftLabel  = "danhale-git/craft" // Label used to identify craft servers
+	anyIP       = "0.0.0.0"           // Refers to any/all IPv4 addresses
+	defaultPort = 19132               // Default port for player connections
+	protocol    = "UDP"               // MC uses UDP
+)
 
 // Server is a wrapper for docker's client.ContainerAPIClient which operates on a specific container.
 type Server struct {
@@ -57,13 +64,13 @@ func New(hostPort int, name string) (*Server, error) {
 	createResp, err := c.ContainerCreate(
 		ctx,
 		&container.Config{
-			Image:        imageName,
+			Image:        craft.ImageName,
 			Env:          []string{"EULA=TRUE"},
 			ExposedPorts: nat.PortSet{containerPort: struct{}{}},
 			AttachStdin:  true, AttachStdout: true, AttachStderr: true,
 			Tty:       true,
 			OpenStdin: true,
-			Labels:    map[string]string{CraftLabel: ""},
+			Labels:    map[string]string{craftLabel: ""},
 		},
 		&container.HostConfig{
 			PortBindings: portBinding,
@@ -108,7 +115,7 @@ func Get(cl client.ContainerAPIClient, containerName string) (*Server, error) {
 		return nil, fmt.Errorf("inspecting container: %s", err)
 	}
 
-	_, ok := containerJSON.Config.Labels[CraftLabel]
+	_, ok := containerJSON.Config.Labels[craftLabel]
 
 	if !ok {
 		return nil, &NotCraftError{Name: containerName}
@@ -249,6 +256,42 @@ func containerID(name string, client client.ContainerAPIClient) (string, error) 
 	}
 
 	return "", &NotFoundError{Name: name}
+}
+
+// nextAvailablePort returns the next available port, starting with the default mc port. It checks the first exposed
+// port of all running containers to determine if a port is in use.
+func nextAvailablePort() int {
+	servers, err := All(craft.DockerClient())
+	if err != nil {
+		panic(err)
+	}
+
+	usedPorts := make([]int, len(servers))
+
+	for i, s := range servers {
+		p, err := s.Port()
+		if err != nil {
+			panic(err)
+		}
+
+		usedPorts[i] = p
+	}
+
+	// Iterate 100 ports starting with the default
+OUTER:
+	for p := defaultPort; p < defaultPort+100; p++ {
+		for _, up := range usedPorts {
+			if p == up {
+				// Another server is using this port
+				continue OUTER
+			}
+		}
+
+		// The port is available
+		return p
+	}
+
+	panic("100 ports were not available")
 }
 
 // NotFoundError tells the caller that no containers were found with the given name.
