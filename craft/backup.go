@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/danhale-git/craft/internal/mcworld"
+
 	"github.com/danhale-git/craft/internal/logger"
 
 	"github.com/danhale-git/craft/internal/server"
@@ -166,8 +168,8 @@ func ExportMCWorld(s *server.Server, dest string) error {
 cmd <server> save resume')`)
 	}
 
-	mcWorld := MCWorld{Path: filePath}
-	if err := mcWorld.check(); err != nil {
+	mcWorld := mcworld.MCWorld{Path: filePath}
+	if err := mcWorld.Check(); err != nil {
 		return fmt.Errorf("invalid world file after exporting: %s", err)
 	}
 

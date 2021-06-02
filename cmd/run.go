@@ -3,6 +3,7 @@ package cmd
 import (
 	"github.com/danhale-git/craft/craft"
 	"github.com/danhale-git/craft/internal/logger"
+	mcworld2 "github.com/danhale-git/craft/internal/mcworld"
 	"github.com/spf13/cobra"
 )
 
@@ -35,9 +36,9 @@ If no port flag is provided, the lowest available (unused by docker) port betwee
 				logger.Panic(err)
 			}
 
-			var mcwFile craft.ZipOpener
+			var mcwFile mcworld2.ZipOpener
 			if mcworld != "" {
-				mcwFile = craft.MCWorld{Path: mcworld}
+				mcwFile = mcworld2.MCWorld{Path: mcworld}
 			}
 
 			c, err := craft.NewServer(args[0], port, props, mcwFile)

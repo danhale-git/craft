@@ -15,6 +15,8 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/danhale-git/craft/internal/mcworld"
+
 	docker "github.com/docker/docker/api/types"
 
 	"github.com/docker/docker/client"
@@ -64,7 +66,7 @@ func GetServerOrExit(containerName string) *server.Server {
 
 // NewServer spawns a new craft server. Only the name is required. Full path to a .mcworld file, port and a slice of
 // "property=newvalue" strings may also be provided.
-func NewServer(name string, port int, props []string, mcworld ZipOpener) (*server.Server, error) {
+func NewServer(name string, port int, props []string, mcworld mcworld.ZipOpener) (*server.Server, error) {
 	// Check the server doesn't already exist
 	if backupExists(name) {
 		return nil, fmt.Errorf("server name '%s' is in use by a backup, run 'craft list -a'", name)
