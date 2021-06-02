@@ -28,7 +28,8 @@ func (s filesByName) Less(i, j int) bool {
 	return it.Before(jt)
 }
 
-// SortFilesByDate returns a sorted list of all os.FileInfos with valid backup names.
+// SortFilesByDate returns a list of all os.FileInfo with valid backup names, sorted by the date the backup was taken.
+// The sort order is older files have lower indices.
 func SortFilesByDate(files []os.FileInfo) []os.FileInfo {
 	// Less can't return an error so ignore invalid files here
 	cleanedFiles := make([]os.FileInfo, 0)

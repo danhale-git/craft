@@ -2,6 +2,7 @@ package craft
 
 import (
 	"archive/tar"
+	"archive/zip"
 	"bufio"
 	"bytes"
 	"context"
@@ -65,10 +66,8 @@ func GetServerOrExit(containerName string) *server.Server {
 // "property=newvalue" strings may also be provided.
 func NewServer(name string, port int, props []string, mcworld ZipOpener) (*server.Server, error) {
 	// Check the server doesn't already exist
-	for _, b := range backupServerNames() {
-		if name == b {
-			return nil, fmt.Errorf("server name '%s' is in use by a backup, run 'craft list -a'", name)
-		}
+	if backupExists(name) {
+		return nil, fmt.Errorf("server name '%s' is in use by a backup, run 'craft list -a'", name)
 	}
 
 	// Create a container for the server
@@ -105,11 +104,12 @@ func NewServer(name string, port int, props []string, mcworld ZipOpener) (*serve
 
 // StartServer sorts all available backup files by date and starts a server from the latest backup.
 func StartServer(name string, port int) (*server.Server, error) {
-	if _, err := server.New(server.DockerClient(), name); err == nil {
+	s, err := server.New(server.DockerClient(), name)
+	if err == nil {
 		return nil, fmt.Errorf("server '%s' is already running (run `craft list`)", name)
 	}
 
-	if !BackupExists(name) {
+	if !backupExists(name) {
 		return nil, fmt.Errorf("stopped server with name '%s' doesn't exist", name)
 	}
 
@@ -124,10 +124,23 @@ func StartServer(name string, port int) (*server.Server, error) {
 		return nil, err
 	}
 
-	err = restoreBackup(c, f.Name())
+	backupPath := filepath.Join(backupDirectory(), s.ContainerName)
+
+	// Open backup zip
+	zr, err := zip.OpenReader(filepath.Join(backupPath, f.Name()))
 	if err != nil {
 		stopServerOrPanic(c)
-		return nil, fmt.Errorf("%s: loading backup file to server: %s", name, err)
+		return nil, err
+	}
+
+	if err = backup.Restore(&zr.Reader, s.ContainerID, dockerClient()); err != nil {
+		stopServerOrPanic(c)
+		return nil, err
+	}
+
+	if err = zr.Close(); err != nil {
+		stopServerOrPanic(c)
+		return nil, fmt.Errorf("closing zip: %s", err)
 	}
 
 	return c, nil
@@ -298,7 +311,7 @@ func PrintServers(all bool) error {
 		return nil
 	}
 
-	for _, n := range backupServerNames() {
+	for _, n := range stoppedServerNames() {
 		if func() bool { // if n is an active server
 			for _, s := range servers {
 				if s.ContainerName == n {
