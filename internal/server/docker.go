@@ -14,8 +14,6 @@ import (
 	"github.com/docker/docker/pkg/jsonmessage"
 
 	"github.com/danhale-git/craft/internal/logger"
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/go-connections/nat"
 
 	_ "embed" // use embed package in this script
 
@@ -39,71 +37,6 @@ func DockerClient() *client.Client {
 	return c
 }
 
-// Run creates a new craft server container and returns a docker client for it.
-// It is the equivalent of the following docker command:
-//
-//    docker run -d -e EULA=TRUE -p <HOST_PORT>:19132/udp <imageName>
-func Run(hostPort int, name string) (*Server, error) {
-	if hostPort == 0 {
-		hostPort = nextAvailablePort()
-	}
-
-	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		logger.Error.Fatalf("Error: Failed to create new docker client: %s", err)
-	}
-
-	ctx := context.Background()
-
-	hostBinding := nat.PortBinding{
-		HostIP:   anyIP,
-		HostPort: strconv.Itoa(hostPort),
-	}
-
-	// -p <HOST_PORT>:19132/udp
-	containerPort, err := nat.NewPort(protocol, strconv.Itoa(defaultPort))
-	if err != nil {
-		return nil, fmt.Errorf("creating container port: %s", err)
-	}
-
-	portBinding := nat.PortMap{containerPort: []nat.PortBinding{hostBinding}}
-
-	// docker run -d -e EULA=TRUE
-	createResp, err := c.ContainerCreate(
-		ctx,
-		&container.Config{
-			Image:        imageName,
-			Env:          []string{"EULA=TRUE"},
-			ExposedPorts: nat.PortSet{containerPort: struct{}{}},
-			AttachStdin:  true, AttachStdout: true, AttachStderr: true,
-			Tty:       true,
-			OpenStdin: true,
-			Labels:    map[string]string{CraftLabel: ""},
-		},
-		&container.HostConfig{
-			PortBindings: portBinding,
-			AutoRemove:   true,
-		},
-		nil, nil, name,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("creating docker container: %s", err)
-	}
-
-	err = c.ContainerStart(ctx, createResp.ID, docker.ContainerStartOptions{})
-	if err != nil {
-		return nil, fmt.Errorf("starting container: %s", err)
-	}
-
-	s := Server{
-		ContainerAPIClient: c,
-		ContainerName:      name,
-		ContainerID:        createResp.ID,
-	}
-
-	return &s, nil
-}
-
 // All returns a client for each active server.
 func All(c client.ContainerAPIClient) ([]*Server, error) {
 	containers, err := c.ContainerList(
@@ -122,7 +55,7 @@ func All(c client.ContainerAPIClient) ([]*Server, error) {
 	servers := make([]*Server, 0)
 
 	for _, n := range names {
-		s, err := New(c, n)
+		s, err := Get(c, n)
 		if err != nil {
 			if _, ok := err.(*NotCraftError); ok {
 				continue

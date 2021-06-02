@@ -45,7 +45,7 @@ func dockerClient() *client.Client {
 // GetServerOrExit is a convenience function for attempting to find an existing docker container with the given name.
 // If not found, a helpful error message is printed and the program exits without error.
 func GetServerOrExit(containerName string) *server.Server {
-	s, err := server.New(server.DockerClient(), containerName)
+	s, err := server.Get(server.DockerClient(), containerName)
 
 	if err != nil {
 		// Container was not found
@@ -73,7 +73,7 @@ func NewServer(name string, port int, props []string, mcworld mcworld.ZipOpener)
 	}
 
 	// Create a container for the server
-	c, err := server.Run(port, name)
+	c, err := server.New(port, name)
 	if err != nil {
 		return nil, fmt.Errorf("creating new container: %s", err)
 	}
@@ -106,7 +106,7 @@ func NewServer(name string, port int, props []string, mcworld mcworld.ZipOpener)
 
 // StartServer sorts all available backup files by date and starts a server from the latest backup.
 func StartServer(name string, port int) (*server.Server, error) {
-	s, err := server.New(server.DockerClient(), name)
+	s, err := server.Get(server.DockerClient(), name)
 	if err == nil {
 		return nil, fmt.Errorf("server '%s' is already running (run `craft list`)", name)
 	}
@@ -115,7 +115,7 @@ func StartServer(name string, port int) (*server.Server, error) {
 		return nil, fmt.Errorf("stopped server with name '%s' doesn't exist", name)
 	}
 
-	c, err := server.Run(port, name)
+	c, err := server.New(port, name)
 	if err != nil {
 		return nil, fmt.Errorf("%s: running server: %s", name, err)
 	}
@@ -151,7 +151,7 @@ func StartServer(name string, port int) (*server.Server, error) {
 // RunBedrock runs the bedrock server process and waits for confirmation from the server that the process has started.
 // The server should be join-able when this function returns.
 func RunBedrock(s *server.Server) error {
-	// Run the bedrock_server process
+	// New the bedrock_server process
 	if err := s.Command(strings.Split(RunMCCommand, " ")); err != nil {
 		stopServerOrPanic(s)
 		return err
@@ -176,9 +176,9 @@ func RunBedrock(s *server.Server) error {
 	return fmt.Errorf("reached end of log reader without finding the 'Server started' message")
 }
 
-// Stop executes a stop command first in the server process cli then on the container itself, stopping the
+// StopServer executes a stop command first in the server process cli then on the container itself, stopping the
 // server. The server must be saves separately to persist the world and settings.
-func Stop(s *server.Server) error {
+func StopServer(s *server.Server) error {
 	if err := s.Command([]string{"stop"}); err != nil {
 		return fmt.Errorf("%s: running 'stop' command in server cli to stop server process: %s", s.ContainerName, err)
 	}
@@ -290,7 +290,7 @@ func PrintServers(all bool) error {
 	}
 
 	for _, s := range servers {
-		s, err := server.New(server.DockerClient(), s.ContainerName)
+		s, err := server.Get(server.DockerClient(), s.ContainerName)
 		if err != nil {
 			return fmt.Errorf("creating docker client: %s", err)
 		}
