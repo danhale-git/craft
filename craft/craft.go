@@ -108,7 +108,7 @@ func NewServer(name string, port int, props []string, mcw mcworld.ZipOpener) (*s
 
 // StartServer sorts all available backup files by date and starts a server from the latest backup.
 func StartServer(name string, port int) (*server.Server, error) {
-	s, err := server.Get(DockerClient(), name)
+	_, err := server.Get(DockerClient(), name)
 	if err == nil {
 		return nil, fmt.Errorf("server '%s' is already running (run `craft list`)", name)
 	}
@@ -117,14 +117,16 @@ func StartServer(name string, port int) (*server.Server, error) {
 		return nil, fmt.Errorf("stopped server with name '%s' doesn't exist", name)
 	}
 
-	c, err := server.New(port, name)
+	s, err := server.New(port, name)
 	if err != nil {
 		return nil, fmt.Errorf("%s: running server: %s", name, err)
 	}
 
+	fmt.Println()
+
 	f, err := latestBackupFile(name)
 	if err != nil {
-		stopServerOrPanic(c)
+		stopServerOrPanic(s)
 		return nil, err
 	}
 
@@ -133,21 +135,21 @@ func StartServer(name string, port int) (*server.Server, error) {
 	// Open backup zip
 	zr, err := zip.OpenReader(filepath.Join(backupPath, f.Name()))
 	if err != nil {
-		stopServerOrPanic(c)
+		stopServerOrPanic(s)
 		return nil, err
 	}
 
 	if err = backup.Restore(&zr.Reader, s.ContainerID, DockerClient()); err != nil {
-		stopServerOrPanic(c)
+		stopServerOrPanic(s)
 		return nil, err
 	}
 
 	if err = zr.Close(); err != nil {
-		stopServerOrPanic(c)
+		stopServerOrPanic(s)
 		return nil, fmt.Errorf("closing zip: %s", err)
 	}
 
-	return c, nil
+	return s, nil
 }
 
 // RunBedrock runs the bedrock server process and waits for confirmation from the server that the process has started.
