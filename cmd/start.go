@@ -41,7 +41,7 @@ If multiple arguments are provided, the --port flag is ignored and ports are ass
 					continue
 				}
 
-				if err = craft.RunBedrock(c); err != nil {
+				if err = c.RunBedrock(); err != nil {
 					logger.Error.Printf("%s: starting server process: %s", name, err)
 				}
 
