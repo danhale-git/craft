@@ -14,9 +14,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/danhale-git/craft/internal/files"
+
+	"github.com/danhale-git/craft/mcworld"
+
 	"github.com/danhale-git/craft/internal/logger"
 
-	"github.com/danhale-git/craft/internal/server"
+	"github.com/danhale-git/craft/server"
 
 	"github.com/mitchellh/go-homedir"
 
@@ -32,7 +36,7 @@ const (
 // may also be included here.
 func serverFiles() []string {
 	return []string{
-		server.LocalPaths.ServerProperties, // server.properties
+		files.LocalPaths.ServerProperties, // server.properties
 	}
 }
 
@@ -75,13 +79,13 @@ func CopyBackup(s *server.Server) (string, error) {
 
 	// Prepend path from server directory to world directory
 	for i, p := range paths {
-		paths[i] = filepath.Join(server.LocalPaths.Worlds, p)
+		paths[i] = filepath.Join(files.LocalPaths.Worlds, p)
 	}
 
 	paths = append(paths, serverFiles()...)
 
 	// Copy server files and write as zip data
-	if err = copyFiles(s, f, server.Directory, paths); err != nil {
+	if err = copyFiles(s, f, files.Directory, paths); err != nil {
 		if err := f.Close(); err != nil {
 			logger.Error.Printf("failed to close backup file after error")
 		}
@@ -148,7 +152,7 @@ func ExportMCWorld(s *server.Server, dest string) error {
 	}
 
 	// Copy server files and write as zip data
-	if err = copyFiles(s, f, server.FullPaths.DefaultWorld, paths); err != nil {
+	if err = copyFiles(s, f, files.FullPaths.DefaultWorld, paths); err != nil {
 		if err := f.Close(); err != nil {
 			logger.Error.Printf("failed to close backup file after error")
 		}
@@ -166,8 +170,8 @@ func ExportMCWorld(s *server.Server, dest string) error {
 cmd <server> save resume')`)
 	}
 
-	mcWorld := MCWorld{Path: filePath}
-	if err := mcWorld.check(); err != nil {
+	mcw := mcworld.MCWorld{Path: filePath}
+	if err := mcw.Check(); err != nil {
 		return fmt.Errorf("invalid world file after exporting: %s", err)
 	}
 
@@ -208,7 +212,7 @@ func copyFiles(s *server.Server, f io.Writer, containerPrefix string, paths []st
 func TrimBackups(name string, keep int, skip bool) ([]string, error) {
 	deleted := make([]string, 0)
 
-	backups := backupFiles(name)
+	backups := serverBackups(name)
 	if keep >= len(backups) {
 		// No backups need to be deleted
 		return nil, nil
@@ -247,10 +251,10 @@ func TrimBackups(name string, keep int, skip bool) ([]string, error) {
 	return deleted, nil
 }
 
-// BackupExists returns true if a backed up server with the given server name exists.
-func BackupExists(name string) bool {
-	for _, b := range backupServerNames() {
-		if name == b && len(backupFiles(name)) > 0 {
+// backupExists returns true if a backed up server with the given server name exists.
+func backupExists(name string) bool {
+	for _, b := range stoppedServerNames() {
+		if name == b && len(serverBackups(name)) > 0 {
 			return true
 		}
 	}
@@ -258,8 +262,9 @@ func BackupExists(name string) bool {
 	return false
 }
 
+// latestBackupFile returns an os.FileInfo for the most recent backup
 func latestBackupFile(name string) (os.FileInfo, error) {
-	backups := backupFiles(name)
+	backups := serverBackups(name)
 
 	switch len(backups) {
 	case 0:
@@ -271,7 +276,8 @@ func latestBackupFile(name string) (os.FileInfo, error) {
 	}
 }
 
-func backupFiles(server string) []os.FileInfo {
+// serverBackups returns a slice of os.FileInfo with each of the backups for the named server, ordered oldest first.
+func serverBackups(server string) []os.FileInfo {
 	infos := make([]os.FileInfo, 0)
 	d := filepath.Join(backupDirectory(), server)
 
@@ -289,8 +295,8 @@ func backupFiles(server string) []os.FileInfo {
 	return backup.SortFilesByDate(infos)
 }
 
-// backupServerNames returns a slice with the names of all backed up servers.
-func backupServerNames() []string {
+// stoppedServerNames returns a slice with the names of all backed up servers.
+func stoppedServerNames() []string {
 	backupDir := backupDirectory()
 	infos, err := ioutil.ReadDir(backupDir)
 
@@ -329,26 +335,6 @@ func backupDirectory() string {
 	}
 
 	return backupDir
-}
-
-func restoreBackup(s *server.Server, backupName string) error {
-	backupPath := filepath.Join(backupDirectory(), s.ContainerName)
-
-	// Open backup zip
-	zr, err := zip.OpenReader(filepath.Join(backupPath, backupName))
-	if err != nil {
-		return err
-	}
-
-	if err = backup.Restore(&zr.Reader, s.ContainerID, dockerClient()); err != nil {
-		return err
-	}
-
-	if err = zr.Close(); err != nil {
-		return fmt.Errorf("closing zip: %s", err)
-	}
-
-	return nil
 }
 
 func addTarToZip(path string, tr *tar.Reader, zw *zip.Writer) error {

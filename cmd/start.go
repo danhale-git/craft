@@ -35,10 +35,14 @@ If multiple arguments are provided, the --port flag is ignored and ports are ass
 			}
 
 			for _, name := range args {
-				_, err := craft.RunLatestBackup(name, port)
+				c, err := craft.StartServer(name, port)
 				if err != nil {
 					logger.Error.Println(err)
 					continue
+				}
+
+				if err = c.RunBedrock(); err != nil {
+					logger.Error.Printf("%s: starting server process: %s", name, err)
 				}
 
 				started = append(started, name)

@@ -13,12 +13,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/danhale-git/craft/internal/files"
+
 	docker "github.com/docker/docker/api/types"
 
 	"github.com/docker/docker/client"
 
 	"github.com/danhale-git/craft/internal/logger"
-	"github.com/danhale-git/craft/internal/server"
 )
 
 const (
@@ -53,7 +54,7 @@ func FileTime(name string) (time.Time, error) {
 // files.
 func Restore(zr *zip.Reader, containerID string, dc client.ContainerAPIClient) error {
 	for _, f := range zr.File {
-		if err := restoreFile(f, server.Directory, containerID, dc); err != nil {
+		if err := restoreFile(f, files.Directory, containerID, dc); err != nil {
 			return fmt.Errorf("restoring %s: %s", f.Name, err)
 		}
 	}
@@ -64,7 +65,7 @@ func Restore(zr *zip.Reader, containerID string, dc client.ContainerAPIClient) e
 // RestoreMCWorld reads from the given zip.Reader, copying each of the files to the default world directory.
 func RestoreMCWorld(zr *zip.Reader, containerID string, dc client.ContainerAPIClient) error {
 	for _, f := range zr.File {
-		if err := restoreFile(f, server.FullPaths.DefaultWorld, containerID, dc); err != nil {
+		if err := restoreFile(f, files.FullPaths.DefaultWorld, containerID, dc); err != nil {
 			return fmt.Errorf("restoring %s: %s", f.Name, err)
 		}
 	}

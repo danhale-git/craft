@@ -28,7 +28,7 @@ func NewStopCmd() *cobra.Command {
 					continue
 				}
 
-				if err := craft.Stop(c); err != nil {
+				if err := c.Stop(); err != nil {
 					logger.Error.Printf("%s: stopping server: %s", c.ContainerName, err)
 					continue
 				}

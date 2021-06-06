@@ -1,4 +1,4 @@
-package craft
+package mcworld
 
 import (
 	"archive/zip"
@@ -19,7 +19,7 @@ type MCWorld struct {
 // Open checks the zip file to validate the presence of leve.dat and levelname.txt before returning the opened
 // zip.Reader. The caller must close the zip.Reader.
 func (w MCWorld) Open() (*zip.ReadCloser, error) {
-	if err := w.check(); err != nil {
+	if err := w.Check(); err != nil {
 		return nil, fmt.Errorf("invalid .mcworld file: %s", err)
 	}
 
@@ -28,7 +28,7 @@ func (w MCWorld) Open() (*zip.ReadCloser, error) {
 	return zr, nil
 }
 
-func (w MCWorld) check() error {
+func (w MCWorld) Check() error {
 	expected := []string{
 		filepath.Join("db", "CURRENT"),
 		"level.dat",

@@ -3,6 +3,7 @@ package cmd
 import (
 	"github.com/danhale-git/craft/craft"
 	"github.com/danhale-git/craft/internal/logger"
+	"github.com/danhale-git/craft/mcworld"
 	"github.com/spf13/cobra"
 )
 
@@ -25,7 +26,7 @@ If no port flag is provided, the lowest available (unused by docker) port betwee
 				logger.Panic(err)
 			}
 
-			mcworld, err := cmd.Flags().GetString("world")
+			mcwPath, err := cmd.Flags().GetString("world")
 			if err != nil {
 				logger.Panic(err)
 			}
@@ -35,14 +36,19 @@ If no port flag is provided, the lowest available (unused by docker) port betwee
 				logger.Panic(err)
 			}
 
-			var mcwFile craft.ZipOpener
-			if mcworld != "" {
-				mcwFile = craft.MCWorld{Path: mcworld}
+			var mcwFile mcworld.ZipOpener
+			if mcwPath != "" {
+				mcwFile = mcworld.MCWorld{Path: mcwPath}
 			}
 
-			err = craft.CreateServer(args[0], port, props, mcwFile)
+			c, err := craft.NewServer(args[0], port, props, mcwFile)
 			if err != nil {
 				logger.Error.Fatalf("creating server: %s", err)
+			}
+
+			// Run the server process
+			if err = c.RunBedrock(); err != nil {
+				logger.Error.Fatalf("starting server process: %s", err)
 			}
 		},
 	}
