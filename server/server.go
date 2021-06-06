@@ -8,8 +8,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/danhale-git/craft/craft"
-
 	"github.com/danhale-git/craft/internal/logger"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
@@ -19,11 +17,21 @@ import (
 )
 
 const (
-	craftLabel  = "danhale-git/craft" // Label used to identify craft servers
-	anyIP       = "0.0.0.0"           // Refers to any/all IPv4 addresses
-	defaultPort = 19132               // Default port for player connections
-	protocol    = "UDP"               // MC uses UDP
+	craftLabel  = "danhale-git/craft"              // Label used to identify craft servers
+	anyIP       = "0.0.0.0"                        // Refers to any/all IPv4 addresses
+	defaultPort = 19132                            // Default port for player connections
+	protocol    = "UDP"                            // MC uses UDP
+	ImageName   = "craft_bedrock_server:autobuild" // The name of the docker image to use
 )
+
+func dockerClient() *client.Client {
+	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+	if err != nil {
+		logger.Error.Fatalf("Error: Failed to create new docker client: %s", err)
+	}
+
+	return c
+}
 
 // Server is a wrapper for docker's client.ContainerAPIClient which operates on a specific container.
 type Server struct {
@@ -64,7 +72,7 @@ func New(hostPort int, name string) (*Server, error) {
 	createResp, err := c.ContainerCreate(
 		ctx,
 		&container.Config{
-			Image:        craft.ImageName,
+			Image:        ImageName,
 			Env:          []string{"EULA=TRUE"},
 			ExposedPorts: nat.PortSet{containerPort: struct{}{}},
 			AttachStdin:  true, AttachStdout: true, AttachStderr: true,
@@ -261,7 +269,7 @@ func containerID(name string, client client.ContainerAPIClient) (string, error) 
 // nextAvailablePort returns the next available port, starting with the default mc port. It checks the first exposed
 // port of all running containers to determine if a port is in use.
 func nextAvailablePort() int {
-	servers, err := All(craft.DockerClient())
+	servers, err := All(dockerClient())
 	if err != nil {
 		panic(err)
 	}

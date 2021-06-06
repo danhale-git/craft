@@ -15,7 +15,9 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/danhale-git/craft/internal/mcworld"
+	"github.com/danhale-git/craft/internal/files"
+
+	"github.com/danhale-git/craft/mcworld"
 
 	docker "github.com/docker/docker/api/types"
 
@@ -25,7 +27,7 @@ import (
 	"github.com/danhale-git/craft/internal/logger"
 
 	"github.com/danhale-git/craft/internal/configure"
-	"github.com/danhale-git/craft/internal/server"
+	"github.com/danhale-git/craft/server"
 )
 
 const (
@@ -33,7 +35,7 @@ const (
 	stopTimeout  = 30
 )
 
-func dockerClient() *client.Client {
+func DockerClient() *client.Client {
 	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		logger.Error.Fatalf("Error: Failed to create new docker client: %s", err)
@@ -66,7 +68,7 @@ func GetServerOrExit(containerName string) *server.Server {
 
 // NewServer spawns a new craft server. Only the name is required. Full path to a .mcworld file, port and a slice of
 // "property=newvalue" strings may also be provided.
-func NewServer(name string, port int, props []string, mcworld mcworld.ZipOpener) (*server.Server, error) {
+func NewServer(name string, port int, props []string, mcw mcworld.ZipOpener) (*server.Server, error) {
 	// Check the server doesn't already exist
 	if backupExists(name) {
 		return nil, fmt.Errorf("server name '%s' is in use by a backup, run 'craft list -a'", name)
@@ -79,14 +81,14 @@ func NewServer(name string, port int, props []string, mcworld mcworld.ZipOpener)
 	}
 
 	// Copy world files to the server
-	if mcworld != nil {
-		zr, err := mcworld.Open()
+	if mcw != nil {
+		zr, err := mcw.Open()
 		if err != nil {
 			stopServerOrPanic(c)
 			return nil, fmt.Errorf("inavlid world file: %s", err)
 		}
 
-		if err = backup.RestoreMCWorld(&zr.Reader, c.ContainerID, dockerClient()); err != nil {
+		if err = backup.RestoreMCWorld(&zr.Reader, c.ContainerID, DockerClient()); err != nil {
 			stopServerOrPanic(c)
 			return nil, fmt.Errorf("restoring backup: %s", err)
 		}
@@ -135,7 +137,7 @@ func StartServer(name string, port int) (*server.Server, error) {
 		return nil, err
 	}
 
-	if err = backup.Restore(&zr.Reader, s.ContainerID, dockerClient()); err != nil {
+	if err = backup.Restore(&zr.Reader, s.ContainerID, DockerClient()); err != nil {
 		stopServerOrPanic(c)
 		return nil, err
 	}
@@ -217,7 +219,7 @@ func SetServerProperties(propFlags []string, s *server.Server) error {
 			v[i] = s[1]
 		}
 
-		containerPath := server.FullPaths.ServerProperties
+		containerPath := files.FullPaths.ServerProperties
 
 		data, _, err := s.CopyFromContainer(
 			context.Background(),
@@ -232,7 +234,7 @@ func SetServerProperties(propFlags []string, s *server.Server) error {
 
 		_, err = tr.Next()
 		if err == io.EOF {
-			return fmt.Errorf("no file was found at '%s', got EOF reading tar archive", server.FullPaths.ServerProperties)
+			return fmt.Errorf("no file was found at '%s', got EOF reading tar archive", files.FullPaths.ServerProperties)
 		}
 
 		if err != nil {

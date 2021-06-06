@@ -14,11 +14,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/danhale-git/craft/internal/mcworld"
+	"github.com/danhale-git/craft/internal/files"
+
+	"github.com/danhale-git/craft/mcworld"
 
 	"github.com/danhale-git/craft/internal/logger"
 
-	"github.com/danhale-git/craft/internal/server"
+	"github.com/danhale-git/craft/server"
 
 	"github.com/mitchellh/go-homedir"
 
@@ -34,7 +36,7 @@ const (
 // may also be included here.
 func serverFiles() []string {
 	return []string{
-		server.LocalPaths.ServerProperties, // server.properties
+		files.LocalPaths.ServerProperties, // server.properties
 	}
 }
 
@@ -77,13 +79,13 @@ func CopyBackup(s *server.Server) (string, error) {
 
 	// Prepend path from server directory to world directory
 	for i, p := range paths {
-		paths[i] = filepath.Join(server.LocalPaths.Worlds, p)
+		paths[i] = filepath.Join(files.LocalPaths.Worlds, p)
 	}
 
 	paths = append(paths, serverFiles()...)
 
 	// Copy server files and write as zip data
-	if err = copyFiles(s, f, server.Directory, paths); err != nil {
+	if err = copyFiles(s, f, files.Directory, paths); err != nil {
 		if err := f.Close(); err != nil {
 			logger.Error.Printf("failed to close backup file after error")
 		}
@@ -150,7 +152,7 @@ func ExportMCWorld(s *server.Server, dest string) error {
 	}
 
 	// Copy server files and write as zip data
-	if err = copyFiles(s, f, server.FullPaths.DefaultWorld, paths); err != nil {
+	if err = copyFiles(s, f, files.FullPaths.DefaultWorld, paths); err != nil {
 		if err := f.Close(); err != nil {
 			logger.Error.Printf("failed to close backup file after error")
 		}
@@ -168,8 +170,8 @@ func ExportMCWorld(s *server.Server, dest string) error {
 cmd <server> save resume')`)
 	}
 
-	mcWorld := mcworld.MCWorld{Path: filePath}
-	if err := mcWorld.Check(); err != nil {
+	mcw := mcworld.MCWorld{Path: filePath}
+	if err := mcw.Check(); err != nil {
 		return fmt.Errorf("invalid world file after exporting: %s", err)
 	}
 

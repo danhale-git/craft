@@ -1,4 +1,4 @@
-package craft
+package server
 
 import (
 	"archive/tar"
@@ -11,26 +11,11 @@ import (
 
 	"github.com/docker/docker/pkg/jsonmessage"
 
-	"github.com/danhale-git/craft/internal/logger"
-
 	_ "embed" // use embed package in this script
 
 	docker "github.com/docker/docker/api/types"
 	"github.com/docker/docker/client"
 )
-
-const (
-	ImageName = "craft_bedrock_server:autobuild" // The name of the docker image to use
-)
-
-func DockerClient() *client.Client {
-	c, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
-	if err != nil {
-		logger.Error.Fatalf("Error: Failed to create new docker client: %s", err)
-	}
-
-	return c
-}
 
 // DockerImageExists returns true if the craft server image exists.
 func DockerImageExists(c client.ImageAPIClient) (bool, error) {
@@ -74,7 +59,7 @@ func BuildDockerImage(serverURL string) error {
 	}
 
 	// Build image
-	response, err := DockerClient().ImageBuild(
+	response, err := dockerClient().ImageBuild(
 		context.Background(),
 		&buf,
 		docker.ImageBuildOptions{
