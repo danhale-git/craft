@@ -7,6 +7,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/danhale-git/craft/internal/logger"
 	"github.com/docker/docker/api/types/container"
@@ -17,11 +18,13 @@ import (
 )
 
 const (
-	craftLabel  = "danhale-git/craft"              // Label used to identify craft servers
-	anyIP       = "0.0.0.0"                        // Refers to any/all IPv4 addresses
-	defaultPort = 19132                            // Default port for player connections
-	protocol    = "UDP"                            // MC uses UDP
-	ImageName   = "craft_bedrock_server:autobuild" // The name of the docker image to use
+	CraftLabel   = "danhale-git/craft"              // Label used to identify craft servers
+	anyIP        = "0.0.0.0"                        // Refers to any/all IPv4 addresses
+	defaultPort  = 19132                            // Default port for player connections
+	protocol     = "UDP"                            // MC uses UDP
+	ImageName    = "craft_bedrock_server:autobuild" // The name of the docker image to use
+	stopTimeout  = 30
+	RunMCCommand = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server"
 )
 
 func dockerClient() *client.Client {
@@ -78,7 +81,7 @@ func New(hostPort int, name string) (*Server, error) {
 			AttachStdin:  true, AttachStdout: true, AttachStderr: true,
 			Tty:       true,
 			OpenStdin: true,
-			Labels:    map[string]string{craftLabel: ""},
+			Labels:    map[string]string{CraftLabel: ""},
 		},
 		&container.HostConfig{
 			PortBindings: portBinding,
@@ -123,13 +126,83 @@ func Get(cl client.ContainerAPIClient, containerName string) (*Server, error) {
 		return nil, fmt.Errorf("inspecting container: %s", err)
 	}
 
-	_, ok := containerJSON.Config.Labels[craftLabel]
+	_, ok := containerJSON.Config.Labels[CraftLabel]
 
 	if !ok {
 		return nil, &NotCraftError{Name: containerName}
 	}
 
 	return &c, nil
+}
+
+// RunBedrock runs the bedrock server process and waits for confirmation from the server that the process has started.
+// The server should be join-able when this function returns.
+func (s *Server) RunBedrock() error {
+	// New the bedrock_server process
+	if err := s.Command(strings.Split(RunMCCommand, " ")); err != nil {
+		s.StopOrPanic()
+		return err
+	}
+
+	logs, err := s.LogReader(-1) // Negative number results in all logs
+	if err != nil {
+		s.StopOrPanic()
+		return err
+	}
+
+	scanner := bufio.NewScanner(logs)
+	scanner.Split(bufio.ScanLines)
+
+	for scanner.Scan() {
+		if scanner.Text() == "[INFO] Server started." {
+			// Server has finished starting
+			return nil
+		}
+	}
+
+	return fmt.Errorf("reached end of log reader without finding the 'Server started' message")
+}
+
+// Stop executes a stop command first in the server process cli then on the container itself, stopping the
+// server. The server must be saved separately to persist the world and settings.
+func (s *Server) Stop() error {
+	if err := s.Command([]string{"stop"}); err != nil {
+		return fmt.Errorf("%s: running 'stop' command in server cli to stop server process: %s", s.ContainerName, err)
+	}
+
+	logger.Info.Printf("stopping %s\n", s.ContainerName)
+
+	timeout := time.Duration(stopTimeout)
+
+	err := s.ContainerStop(
+		context.Background(),
+		s.ContainerID,
+		&timeout,
+	)
+
+	if err != nil {
+		return fmt.Errorf("%s: stopping docker container: %s", s.ContainerName, err)
+	}
+
+	return nil
+}
+
+// StopOrPanic stops the server's container. The server process may not be stopped gracefully, call Server.Stop() to
+// safely stop the server. If an error occurs while attempting to stop the server the program exits with a panic.
+func (s *Server) StopOrPanic() {
+	logger.Info.Printf("stopping %s\n", s.ContainerName)
+
+	timeout := time.Duration(stopTimeout)
+
+	err := s.ContainerStop(
+		context.Background(),
+		s.ContainerID,
+		&timeout,
+	)
+
+	if err != nil {
+		logger.Error.Panicf("while stopping %s another error occurred: %s\n", s.ContainerName, err)
+	}
 }
 
 // Command attaches to the container and runs the given arguments separated by spaces.

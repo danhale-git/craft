@@ -3,7 +3,6 @@ package craft
 import (
 	"archive/tar"
 	"archive/zip"
-	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -13,7 +12,6 @@ import (
 	"path/filepath"
 	"strings"
 	"text/tabwriter"
-	"time"
 
 	"github.com/danhale-git/craft/internal/files"
 
@@ -28,11 +26,6 @@ import (
 
 	"github.com/danhale-git/craft/internal/configure"
 	"github.com/danhale-git/craft/server"
-)
-
-const (
-	RunMCCommand = "cd bedrock; LD_LIBRARY_PATH=. ./bedrock_server"
-	stopTimeout  = 30
 )
 
 func DockerClient() *client.Client {
@@ -84,12 +77,12 @@ func NewServer(name string, port int, props []string, mcw mcworld.ZipOpener) (*s
 	if mcw != nil {
 		zr, err := mcw.Open()
 		if err != nil {
-			stopServerOrPanic(c)
+			c.StopOrPanic()
 			return nil, fmt.Errorf("inavlid world file: %s", err)
 		}
 
 		if err = backup.RestoreMCWorld(&zr.Reader, c.ContainerID, DockerClient()); err != nil {
-			stopServerOrPanic(c)
+			c.StopOrPanic()
 			return nil, fmt.Errorf("restoring backup: %s", err)
 		}
 
@@ -126,7 +119,7 @@ func StartServer(name string, port int) (*server.Server, error) {
 
 	f, err := latestBackupFile(name)
 	if err != nil {
-		stopServerOrPanic(s)
+		s.StopOrPanic()
 		return nil, err
 	}
 
@@ -135,73 +128,21 @@ func StartServer(name string, port int) (*server.Server, error) {
 	// Open backup zip
 	zr, err := zip.OpenReader(filepath.Join(backupPath, f.Name()))
 	if err != nil {
-		stopServerOrPanic(s)
+		s.StopOrPanic()
 		return nil, err
 	}
 
 	if err = backup.Restore(&zr.Reader, s.ContainerID, DockerClient()); err != nil {
-		stopServerOrPanic(s)
+		s.StopOrPanic()
 		return nil, err
 	}
 
 	if err = zr.Close(); err != nil {
-		stopServerOrPanic(s)
+		s.StopOrPanic()
 		return nil, fmt.Errorf("closing zip: %s", err)
 	}
 
 	return s, nil
-}
-
-// RunBedrock runs the bedrock server process and waits for confirmation from the server that the process has started.
-// The server should be join-able when this function returns.
-func RunBedrock(s *server.Server) error {
-	// New the bedrock_server process
-	if err := s.Command(strings.Split(RunMCCommand, " ")); err != nil {
-		stopServerOrPanic(s)
-		return err
-	}
-
-	logs, err := s.LogReader(-1) // Negative number results in all logs
-	if err != nil {
-		stopServerOrPanic(s)
-		return err
-	}
-
-	scanner := bufio.NewScanner(logs)
-	scanner.Split(bufio.ScanLines)
-
-	for scanner.Scan() {
-		if scanner.Text() == "[INFO] Server started." {
-			// Server has finished starting
-			return nil
-		}
-	}
-
-	return fmt.Errorf("reached end of log reader without finding the 'Server started' message")
-}
-
-// StopServer executes a stop command first in the server process cli then on the container itself, stopping the
-// server. The server must be saves separately to persist the world and settings.
-func StopServer(s *server.Server) error {
-	if err := s.Command([]string{"stop"}); err != nil {
-		return fmt.Errorf("%s: running 'stop' command in server cli to stop server process: %s", s.ContainerName, err)
-	}
-
-	logger.Info.Printf("stopping %s\n", s.ContainerName)
-
-	timeout := time.Duration(stopTimeout)
-
-	err := s.ContainerStop(
-		context.Background(),
-		s.ContainerID,
-		&timeout,
-	)
-
-	if err != nil {
-		return fmt.Errorf("%s: stopping docker container: %s", s.ContainerName, err)
-	}
-
-	return nil
 }
 
 // SetServerProperties takes a slice of key=value strings and applies them to the server.properties configuration
@@ -349,20 +290,4 @@ func PrintServers(all bool) error {
 	}
 
 	return nil
-}
-
-func stopServerOrPanic(s *server.Server) {
-	logger.Info.Printf("stopping %s\n", s.ContainerName)
-
-	timeout := time.Duration(stopTimeout)
-
-	err := s.ContainerStop(
-		context.Background(),
-		s.ContainerID,
-		&timeout,
-	)
-
-	if err != nil {
-		logger.Error.Panicf("while stopping %s another error occurred: %s\n", s.ContainerName, err)
-	}
 }

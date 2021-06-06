@@ -47,7 +47,7 @@ If no port flag is provided, the lowest available (unused by docker) port betwee
 			}
 
 			// Run the server process
-			if err = craft.RunBedrock(c); err != nil {
+			if err = c.RunBedrock(); err != nil {
 				logger.Error.Fatalf("starting server process: %s", err)
 			}
 		},
