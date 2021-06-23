@@ -9,6 +9,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/danhale-git/craft/internal/files"
+
+	"github.com/docker/docker/api/types/mount"
+
 	"github.com/danhale-git/craft/internal/logger"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-connections/nat"
@@ -46,7 +50,7 @@ type Server struct {
 // It is the equivalent of the following docker command:
 //
 //    docker run -d -e EULA=TRUE -p <HOST_PORT>:19132/udp <imageName>
-func New(hostPort int, name string) (*Server, error) {
+func New(hostPort int, name, bindMountSource string) (*Server, error) {
 	if hostPort == 0 {
 		hostPort = nextAvailablePort()
 	}
@@ -71,6 +75,16 @@ func New(hostPort int, name string) (*Server, error) {
 
 	portBinding := nat.PortMap{containerPort: []nat.PortBinding{hostBinding}}
 
+	var mounts []mount.Mount
+
+	if bindMountSource != "" {
+		mounts = []mount.Mount{{
+			Type:   mount.TypeBind,
+			Source: bindMountSource,
+			Target: files.Directory,
+		}}
+	}
+
 	// docker run -d -e EULA=TRUE
 	createResp, err := c.ContainerCreate(
 		ctx,
@@ -86,6 +100,7 @@ func New(hostPort int, name string) (*Server, error) {
 		&container.HostConfig{
 			PortBindings: portBinding,
 			AutoRemove:   true,
+			Mounts:       mounts,
 		},
 		nil, nil, name,
 	)

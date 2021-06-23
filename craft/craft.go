@@ -68,7 +68,7 @@ func NewServer(name string, port int, props []string, mcw mcworld.ZipOpener) (*s
 	}
 
 	// Create a container for the server
-	c, err := server.New(port, name)
+	c, err := server.New(port, name, bindMountDirectory())
 	if err != nil {
 		return nil, fmt.Errorf("creating new container: %s", err)
 	}
@@ -110,7 +110,7 @@ func StartServer(name string, port int) (*server.Server, error) {
 		return nil, fmt.Errorf("stopped server with name '%s' doesn't exist", name)
 	}
 
-	s, err := server.New(port, name)
+	s, err := server.New(port, name, "")
 	if err != nil {
 		return nil, fmt.Errorf("%s: running server: %s", name, err)
 	}

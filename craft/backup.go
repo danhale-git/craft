@@ -28,7 +28,8 @@ import (
 )
 
 const (
-	backupDirName = "craft_backups" // Name of the local directory where backups are stored
+	backupDirName    = "craft_backups" // Name of the local directory where backups are stored
+	bindMountDirName = "server_bindmount"
 )
 
 // serverFiles returns the paths to all files in the server directory which are not part of the world backup. World
@@ -324,7 +325,7 @@ func backupDirectory() string {
 		logger.Error.Fatalf("getting home directory: %s", err)
 	}
 
-	backupDir := path.Join(home, backupDirName)
+	backupDir := filepath.Join(home, backupDirName)
 
 	// Create directory if it doesn't exist
 	if _, err := os.Stat(backupDir); os.IsNotExist(err) {
@@ -335,6 +336,21 @@ func backupDirectory() string {
 	}
 
 	return backupDir
+}
+
+func bindMountDirectory() string {
+	mountDir := backupDirectory()
+	mountDir = filepath.Join(mountDir, bindMountDirName)
+
+	// Create directory if it doesn't exist
+	if _, err := os.Stat(mountDir); os.IsNotExist(err) {
+		err = os.MkdirAll(mountDir, 0755)
+		if err != nil {
+			logger.Error.Fatalf("checking bind mount directory exists: %s", err)
+		}
+	}
+
+	return mountDir
 }
 
 func addTarToZip(path string, tr *tar.Reader, zw *zip.Writer) error {
