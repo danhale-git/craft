@@ -61,14 +61,14 @@ func GetServerOrExit(containerName string) *server.Server {
 
 // NewServer spawns a new craft server. Only the name is required. Full path to a .mcworld file, port and a slice of
 // "property=newvalue" strings may also be provided.
-func NewServer(name string, port int, props []string, mcw mcworld.ZipOpener) (*server.Server, error) {
+func NewServer(name string, port int, props []string, mcw mcworld.ZipOpener, useVolume bool) (*server.Server, error) {
 	// Check the server doesn't already exist
 	if backupExists(name) {
 		return nil, fmt.Errorf("server name '%s' is in use by a backup, run 'craft list -a'", name)
 	}
 
 	// Create a container for the server
-	c, err := server.New(port, name, bindMountDirectory())
+	c, err := server.New(port, name, useVolume)
 	if err != nil {
 		return nil, fmt.Errorf("creating new container: %s", err)
 	}
@@ -110,7 +110,7 @@ func StartServer(name string, port int) (*server.Server, error) {
 		return nil, fmt.Errorf("stopped server with name '%s' doesn't exist", name)
 	}
 
-	s, err := server.New(port, name, "")
+	s, err := server.New(port, name, false)
 	if err != nil {
 		return nil, fmt.Errorf("%s: running server: %s", name, err)
 	}

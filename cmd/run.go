@@ -36,12 +36,17 @@ If no port flag is provided, the lowest available (unused by docker) port betwee
 				logger.Panic(err)
 			}
 
+			noVolume, err := cmd.Flags().GetBool("no-volume")
+			if err != nil {
+				logger.Panic(err)
+			}
+
 			var mcwFile mcworld.ZipOpener
 			if mcwPath != "" {
 				mcwFile = mcworld.MCWorld{Path: mcwPath}
 			}
 
-			c, err := craft.NewServer(args[0], port, props, mcwFile)
+			c, err := craft.NewServer(args[0], port, props, mcwFile, !noVolume)
 			if err != nil {
 				logger.Error.Fatalf("creating server: %s", err)
 			}
@@ -55,12 +60,12 @@ If no port flag is provided, the lowest available (unused by docker) port betwee
 
 	runCmd.Flags().Int("port", 0,
 		"External port for players connect to. Default (0 value) will auto-assign a port.")
-
 	runCmd.Flags().String("world", "",
 		"Path to a .mcworld file to be loaded.")
-
 	runCmd.Flags().StringSlice("prop", nil,
 		"A server.properties field e.g. --prop gamemode=survival")
+	runCmd.Flags().Bool("no-volume", false,
+		"World data is only saved when the 'craft backup' command is run, no persistent storage.")
 
 	return runCmd
 }

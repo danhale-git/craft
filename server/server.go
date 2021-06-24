@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docker/docker/api/types/volume"
+
 	"github.com/danhale-git/craft/internal/files"
 
 	"github.com/docker/docker/api/types/mount"
@@ -22,7 +24,8 @@ import (
 )
 
 const (
-	CraftLabel   = "danhale-git/craft"              // Label used to identify craft servers
+	CraftLabel   = "danhale-git/craft" // Label used to identify craft servers
+	volumeLabel  = "danhale-git_craft"
 	anyIP        = "0.0.0.0"                        // Refers to any/all IPv4 addresses
 	defaultPort  = 19132                            // Default port for player connections
 	protocol     = "UDP"                            // MC uses UDP
@@ -50,7 +53,7 @@ type Server struct {
 // It is the equivalent of the following docker command:
 //
 //    docker run -d -e EULA=TRUE -p <HOST_PORT>:19132/udp <imageName>
-func New(hostPort int, name, bindMountSource string) (*Server, error) {
+func New(hostPort int, name string, mountVolume bool) (*Server, error) {
 	if hostPort == 0 {
 		hostPort = nextAvailablePort()
 	}
@@ -76,11 +79,18 @@ func New(hostPort int, name, bindMountSource string) (*Server, error) {
 	portBinding := nat.PortMap{containerPort: []nat.PortBinding{hostBinding}}
 
 	var mounts []mount.Mount
+	if mountVolume {
+		volName := fmt.Sprintf("%s-%s", volumeLabel, name)
+		vol, err := c.VolumeCreate(ctx, volume.VolumeCreateBody{
+			Name: volName,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("creating vol '%s': %w", volName, err)
+		}
 
-	if bindMountSource != "" {
 		mounts = []mount.Mount{{
-			Type:   mount.TypeBind,
-			Source: bindMountSource,
+			Type:   mount.TypeVolume,
+			Source: vol.Name,
 			Target: files.Directory,
 		}}
 	}
@@ -99,7 +109,7 @@ func New(hostPort int, name, bindMountSource string) (*Server, error) {
 		},
 		&container.HostConfig{
 			PortBindings: portBinding,
-			AutoRemove:   true,
+			AutoRemove:   false,
 			Mounts:       mounts,
 		},
 		nil, nil, name,
