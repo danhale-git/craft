@@ -3,6 +3,7 @@ package server
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -53,6 +54,8 @@ type Server struct {
 // It is the equivalent of the following docker command:
 //
 //    docker run -d -e EULA=TRUE -p <HOST_PORT>:19132/udp <imageName>
+//
+// If mountVolume is true, a local volume will also be mounted and autoremove will be disabled.
 func New(hostPort int, name string, mountVolume bool) (*Server, error) {
 	if hostPort == 0 {
 		hostPort = nextAvailablePort()
@@ -109,7 +112,7 @@ func New(hostPort int, name string, mountVolume bool) (*Server, error) {
 		},
 		&container.HostConfig{
 			PortBindings: portBinding,
-			AutoRemove:   false,
+			AutoRemove:   !mountVolume,
 			Mounts:       mounts,
 		},
 		nil, nil, name,
@@ -132,8 +135,9 @@ func New(hostPort int, name string, mountVolume bool) (*Server, error) {
 	return &s, nil
 }
 
-// Get returns a Server struct representing a server which was already running. If the given name doesn't exist an error
-// of type NotFoundError is returned.
+// Get searches for a server with the given name (stopped or running) and checks that it has a label identifying it as
+// a craft server. If no craft server with that name exists, an error of type NotFoundError. If the server is found but
+// is not a craft server, an error of type NotCraftError is returned.
 func Get(cl client.ContainerAPIClient, containerName string) (*Server, error) {
 	id, err := containerID(containerName, cl)
 	if err != nil {
@@ -158,6 +162,39 @@ func Get(cl client.ContainerAPIClient, containerName string) (*Server, error) {
 	}
 
 	return &c, nil
+}
+
+// Stop executes a stop command first in the server process cli then on the container itself, stopping the
+// server. The server must be saved separately to persist the world and settings.
+func (s *Server) Stop() error {
+	if err := s.Command([]string{"stop"}); err != nil {
+		return fmt.Errorf("%s: running 'stop' command in server cli to stop server process: %s", s.ContainerName, err)
+	}
+
+	logger.Info.Printf("stopping %s\n", s.ContainerName)
+
+	timeout := time.Duration(stopTimeout)
+
+	err := s.ContainerStop(
+		context.Background(),
+		s.ContainerID,
+		&timeout,
+	)
+
+	if err != nil {
+		return fmt.Errorf("%s: stopping docker container: %s", s.ContainerName, err)
+	}
+
+	return nil
+}
+
+func (s *Server) IsRunning() bool {
+	inspect, err := s.ContainerInspect(context.Background(), s.ContainerID)
+	if err != nil {
+		logger.Error.Panic(err)
+	}
+
+	return inspect.State.Running
 }
 
 // RunBedrock runs the bedrock server process and waits for confirmation from the server that the process has started.
@@ -186,30 +223,6 @@ func (s *Server) RunBedrock() error {
 	}
 
 	return fmt.Errorf("reached end of log reader without finding the 'Server started' message")
-}
-
-// Stop executes a stop command first in the server process cli then on the container itself, stopping the
-// server. The server must be saved separately to persist the world and settings.
-func (s *Server) Stop() error {
-	if err := s.Command([]string{"stop"}); err != nil {
-		return fmt.Errorf("%s: running 'stop' command in server cli to stop server process: %s", s.ContainerName, err)
-	}
-
-	logger.Info.Printf("stopping %s\n", s.ContainerName)
-
-	timeout := time.Duration(stopTimeout)
-
-	err := s.ContainerStop(
-		context.Background(),
-		s.ContainerID,
-		&timeout,
-	)
-
-	if err != nil {
-		return fmt.Errorf("%s: stopping docker container: %s", s.ContainerName, err)
-	}
-
-	return nil
 }
 
 // StopOrPanic stops the server's container. The server process may not be stopped gracefully, call Server.Stop() to
@@ -320,7 +333,7 @@ func (s *Server) Port() (int, error) {
 func All(c client.ContainerAPIClient) ([]*Server, error) {
 	containers, err := c.ContainerList(
 		context.Background(),
-		docker.ContainerListOptions{},
+		docker.ContainerListOptions{All: true},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("listing docker containers: %s", err)
@@ -336,7 +349,7 @@ func All(c client.ContainerAPIClient) ([]*Server, error) {
 	for _, n := range names {
 		s, err := Get(c, n)
 		if err != nil {
-			if _, ok := err.(*NotCraftError); ok {
+			if errors.Is(err, &NotCraftError{}) || !s.IsRunning() {
 				continue
 			}
 
@@ -350,7 +363,7 @@ func All(c client.ContainerAPIClient) ([]*Server, error) {
 }
 
 func containerID(name string, client client.ContainerAPIClient) (string, error) {
-	containers, err := client.ContainerList(context.Background(), docker.ContainerListOptions{})
+	containers, err := client.ContainerList(context.Background(), docker.ContainerListOptions{All: true})
 	if err != nil {
 		return "", fmt.Errorf("listing all containers: %s", err)
 	}

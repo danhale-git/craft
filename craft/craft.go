@@ -5,6 +5,7 @@ import (
 	"archive/zip"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/danhale-git/craft/internal/files"
 
@@ -41,13 +43,15 @@ func DockerClient() *client.Client {
 // If not found, a helpful error message is printed and the program exits without error.
 func GetServerOrExit(containerName string) *server.Server {
 	s, err := server.Get(DockerClient(), containerName)
-
 	if err != nil {
 		// Container was not found
-		if _, ok := err.(*server.NotFoundError); ok {
+		if errors.Is(err, &server.NotFoundError{}) {
 			logger.Info.Println(err)
 			os.Exit(0)
-		} else if _, ok := err.(*server.NotCraftError); ok {
+		} else if errors.Is(err, &server.NotCraftError{}) {
+			logger.Info.Println(err)
+			os.Exit(0)
+		} else if !s.IsRunning() {
 			logger.Info.Println(err)
 			os.Exit(0)
 		}
@@ -101,21 +105,44 @@ func NewServer(name string, port int, props []string, mcw mcworld.ZipOpener, use
 
 // StartServer sorts all available backup files by date and starts a server from the latest backup.
 func StartServer(name string, port int) (*server.Server, error) {
-	_, err := server.Get(DockerClient(), name)
-	if err == nil {
-		return nil, fmt.Errorf("server '%s' is already running (run `craft list`)", name)
+	s, err := server.Get(DockerClient(), name)
+	if errors.Is(err, &server.NotFoundError{}) {
+		if !backupExists(name) {
+			return nil, fmt.Errorf("stopped server with name '%s' doesn't exist", name)
+		}
+
+		s, err = startServerFromBackup(name, port)
+		if err != nil {
+			return nil, fmt.Errorf("starting server from backup: %w", err)
+		}
+
+		return s, nil
+	}
+	if err != nil {
+		return nil, err
 	}
 
-	if !backupExists(name) {
-		return nil, fmt.Errorf("stopped server with name '%s' doesn't exist", name)
+	if s.IsRunning() {
+		return nil, fmt.Errorf("server '%s' is already running (run 'craft list')", name)
 	}
 
+	err = s.ContainerStart(
+		context.Background(),
+		s.ContainerID,
+		docker.ContainerStartOptions{},
+	)
+	if err != nil {
+		return nil, fmt.Errorf("%s: starting docker container: %s", s.ContainerName, err)
+	}
+
+	return s, nil
+}
+
+func startServerFromBackup(name string, port int) (*server.Server, error) {
 	s, err := server.New(port, name, false)
 	if err != nil {
 		return nil, fmt.Errorf("%s: running server: %s", name, err)
 	}
-
-	fmt.Println()
 
 	f, err := latestBackupFile(name)
 	if err != nil {
@@ -229,15 +256,22 @@ func SetServerProperties(propFlags []string, s *server.Server) error {
 func PrintServers(all bool) error {
 	w := tabwriter.NewWriter(os.Stdout, 3, 3, 3, ' ', tabwriter.TabIndent)
 
+	stoppedContainers := make([]*server.Server, 0)
+
 	servers, err := server.All(DockerClient())
 	if err != nil {
 		return fmt.Errorf("getting server clients: %s", err)
 	}
 
+	// Print running servers
 	for _, s := range servers {
 		s, err := server.Get(DockerClient(), s.ContainerName)
 		if err != nil {
 			return fmt.Errorf("creating docker client: %s", err)
+		}
+		if !s.IsRunning() {
+			stoppedContainers = append(stoppedContainers, s)
+			continue
 		}
 
 		port, err := s.Port()
@@ -258,6 +292,7 @@ func PrintServers(all bool) error {
 		return nil
 	}
 
+	// Print stopped servers without mounted volumes
 	for _, n := range stoppedServerNames() {
 		if func() bool { // if n is an active server
 			for _, s := range servers {
@@ -281,6 +316,30 @@ func PrintServers(all bool) error {
 		}
 
 		if _, err := fmt.Fprintf(w, "%s\tstopped - %s\n", n, t.Format("02 Jan 2006 3:04PM")); err != nil {
+			logger.Error.Fatalf("Error writing to table: %s", err)
+		}
+	}
+
+	// Print stopped servers with mounted volumes
+	for _, s := range stoppedContainers {
+		inspect, err := s.ContainerInspect(context.Background(), s.ContainerID)
+		if err != nil {
+			return err
+		}
+
+		layout := "2006-01-02T15:04:05.0000000Z"
+
+		t, err := time.Parse(layout, inspect.State.FinishedAt)
+		if err != nil {
+			return fmt.Errorf("failed to pass stopped time for server '%s': %w", s.ContainerName, err)
+		}
+
+		p, err := s.Port()
+		if err != nil {
+			return err
+		}
+
+		if _, err := fmt.Fprintf(w, "%s\tstopped (volume) - port %d - %s\n", s.ContainerName, p, t.Format("02 Jan 2006 3:04PM")); err != nil {
 			logger.Error.Fatalf("Error writing to table: %s", err)
 		}
 	}
