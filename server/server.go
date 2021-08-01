@@ -197,6 +197,15 @@ func (s *Server) IsRunning() bool {
 	return inspect.State.Running
 }
 
+func (s *Server) HasVolume() bool {
+	inspect, err := s.ContainerInspect(context.Background(), s.ContainerID)
+	if err != nil {
+		logger.Error.Panic(err)
+	}
+
+	return len(inspect.Mounts) > 0
+}
+
 // RunBedrock runs the bedrock server process and waits for confirmation from the server that the process has started.
 // The server should be join-able when this function returns.
 func (s *Server) RunBedrock() error {
@@ -422,6 +431,12 @@ func (e *NotFoundError) Error() string {
 	return fmt.Sprintf("container with name '%s' not found.", e.Name)
 }
 
+// Is implements Is(error) to support errors.Is
+func (e *NotFoundError) Is(tgt error) bool {
+	_, ok := tgt.(*NotFoundError)
+	return ok
+}
+
 // NotCraftError reports the instance where a container is found with a given name but lacks the label
 // indicating that it is managed using craft.
 type NotCraftError struct {
@@ -430,4 +445,10 @@ type NotCraftError struct {
 
 func (e *NotCraftError) Error() string {
 	return fmt.Sprintf("container found with name '%s' but it does not appear to be a craft server.", e.Name)
+}
+
+// Is implements Is(error) to support errors.Is
+func (e *NotCraftError) Is(tgt error) bool {
+	_, ok := tgt.(*NotCraftError)
+	return ok
 }

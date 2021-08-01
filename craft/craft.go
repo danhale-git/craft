@@ -106,20 +106,22 @@ func NewServer(name string, port int, props []string, mcw mcworld.ZipOpener, use
 // StartServer sorts all available backup files by date and starts a server from the latest backup.
 func StartServer(name string, port int) (*server.Server, error) {
 	s, err := server.Get(DockerClient(), name)
-	if errors.Is(err, &server.NotFoundError{}) {
-		if !backupExists(name) {
-			return nil, fmt.Errorf("stopped server with name '%s' doesn't exist", name)
-		}
 
-		s, err = startServerFromBackup(name, port)
-		if err != nil {
-			return nil, fmt.Errorf("starting server from backup: %w", err)
-		}
-
-		return s, nil
-	}
 	if err != nil {
-		return nil, err
+		if errors.Is(err, &server.NotFoundError{}) {
+			if !backupExists(name) {
+				return nil, fmt.Errorf("stopped server with name '%s' doesn't exist", name)
+			}
+
+			s, err = startServerFromBackup(name, port)
+			if err != nil {
+				return nil, fmt.Errorf("starting server from backup: %w", err)
+			}
+
+			return s, nil
+		} else {
+			return nil, err
+		}
 	}
 
 	if s.IsRunning() {
