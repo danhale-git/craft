@@ -10,7 +10,7 @@ import (
 func NewConfigureCmd() *cobra.Command {
 	configureCmd := &cobra.Command{
 		Use:   "configure <server>",
-		Short: "Configure server properties.",
+		Short: "Configure server.properties",
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.RangeArgs(1, 1)(cmd, args)
 		},

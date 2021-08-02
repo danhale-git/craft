@@ -26,7 +26,7 @@ ending bedrock-server-<version>.zip`
 func NewBuildCommand() *cobra.Command {
 	command := &cobra.Command{
 		Use:   "build",
-		Short: "Build the server image.",
+		Short: "Build the server image from a bedrock server download url",
 		Args:  cobra.NoArgs,
 		Run: func(cmd *cobra.Command, args []string) {
 			urlString, err := cmd.Flags().GetString("url")

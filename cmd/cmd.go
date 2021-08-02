@@ -82,7 +82,7 @@ func NewRootCmd() *cobra.Command {
 func NewVersionCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "version",
-		Short: "Show the current craft version.",
+		Short: "Show the current craft version",
 		Run: func(cmd *cobra.Command, args []string) {
 			fmt.Println("craft version 0.1.1")
 		},

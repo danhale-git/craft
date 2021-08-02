@@ -5,7 +5,8 @@ import (
 )
 
 const (
-	Directory = "/bedrock" // Directory where the server files are stored
+	Directory     = "/bedrock"      // Directory where the server files are stored
+	BackupDirName = "craft_backups" // Name of the local directory where backups are stored
 )
 
 type FileDetails struct {

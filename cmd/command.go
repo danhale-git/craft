@@ -13,7 +13,7 @@ func NewCommandCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "command <server> <mc command>",
 		Aliases: []string{"cmd"},
-		Short:   "Run a command on a server",
+		Short:   "Run a command in the bedrock server cli",
 		Long:    `The first argument is the serer name. The following arguments will be executed in the server CLI.`,
 		Example: "craft command myserver give PlayerName stone 1",
 		Args: func(cmd *cobra.Command, args []string) error {

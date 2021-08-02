@@ -10,7 +10,7 @@ import (
 func NewExportCommand() *cobra.Command {
 	command := &cobra.Command{
 		Use:   "export",
-		Short: "Export the current world to a .mcworld file.",
+		Short: "Export the current world to a .mcworld file",
 		Args: func(cmd *cobra.Command, args []string) error {
 			return cobra.ExactArgs(1)(cmd, args)
 		},

@@ -1,7 +1,10 @@
 package cmd
 
 import (
+	"fmt"
 	"strings"
+
+	"github.com/danhale-git/craft/internal/files"
 
 	"github.com/danhale-git/craft/craft"
 	"github.com/danhale-git/craft/internal/logger"
@@ -12,9 +15,9 @@ import (
 func NewBackupCmd() *cobra.Command {
 	backupCmd := &cobra.Command{
 		Use:   "backup <server names...>",
-		Short: "Take a backup",
+		Short: fmt.Sprintf("Back up server and world files to ~/%s", files.BackupDirName),
 		Long: `
-Save the current world and server.properties to a zip file in the backup directory.
+Save the current world and server configuration to a zip file in the backup directory.
 If two backups are taken in the same minute, the second will overwrite the first.
 Backups are saved to a default directory under the user's home directory.
 The backed up world is usually a few seconds behind the world state at the time of backup.

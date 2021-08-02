@@ -27,10 +27,6 @@ import (
 	"github.com/danhale-git/craft/internal/backup"
 )
 
-const (
-	backupDirName = "craft_backups" // Name of the local directory where backups are stored
-)
-
 // serverFiles returns the paths to all files in the server directory which are not part of the world backup. World
 // files are retrieved as part of the server's built in backup function. Other files required to persist the server
 // may also be included here.
@@ -324,7 +320,7 @@ func backupDirectory() string {
 		logger.Error.Fatalf("getting home directory: %s", err)
 	}
 
-	backupDir := filepath.Join(home, backupDirName)
+	backupDir := filepath.Join(home, files.BackupDirName)
 
 	// Create directory if it doesn't exist
 	if _, err := os.Stat(backupDir); os.IsNotExist(err) {

@@ -13,7 +13,7 @@ func NewStartCmd() *cobra.Command {
 	// startCmd represents the start command
 	startCmd := &cobra.Command{
 		Use:   "start <servers...>",
-		Short: "Start a stopped server.",
+		Short: "Start a stopped server",
 		Long: `Start creates a new server from the latest backup for the given server name(s).
 
 If no port flag is provided, the lowest available (unused by docker) port between 19132 and 19232 will be used.
