@@ -69,8 +69,6 @@ func NewBuildCommand() *cobra.Command {
 }
 
 func getServerDownloadURL() ([]byte, error) {
-	downloadURL := make([]byte, 0)
-
 	request, err := http.NewRequest("GET", webURL, nil)
 	if err != nil {
 		return nil, fmt.Errorf("creating http request: %w", err)
@@ -95,7 +93,5 @@ func getServerDownloadURL() ([]byte, error) {
 	}
 
 	downloadURLRegexp := regexp.MustCompile(downloadURLRegexp)
-	downloadURL = downloadURLRegexp.Find(data)
-
-	return downloadURL, nil
+	return downloadURLRegexp.Find(data), nil
 }
