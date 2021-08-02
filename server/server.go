@@ -215,7 +215,7 @@ func (s *Server) RunBedrock() error {
 		return err
 	}
 
-	logs, err := s.LogReader(-1) // Negative number results in all logs
+	logs, err := s.LogReader(1)
 	if err != nil {
 		s.StopOrPanic()
 		return err
