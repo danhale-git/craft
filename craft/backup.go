@@ -324,7 +324,7 @@ func backupDirectory() string {
 		logger.Error.Fatalf("getting home directory: %s", err)
 	}
 
-	backupDir := path.Join(home, backupDirName)
+	backupDir := filepath.Join(home, backupDirName)
 
 	// Create directory if it doesn't exist
 	if _, err := os.Stat(backupDir); os.IsNotExist(err) {

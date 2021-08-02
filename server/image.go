@@ -37,7 +37,7 @@ func DockerImageExists(c client.ImageAPIClient) (bool, error) {
 var dockerfile []byte //nolint:gochecknoglobals // embed needs a global
 
 // BuildDockerImage builds the server image.
-func BuildDockerImage(serverURL string) error {
+func BuildDockerImage(serverURL string, noCache bool) error {
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 
@@ -68,6 +68,7 @@ func BuildDockerImage(serverURL string) error {
 			BuildArgs: map[string]*string{
 				"URL": &serverURL,
 			},
+			NoCache: noCache,
 		},
 	)
 

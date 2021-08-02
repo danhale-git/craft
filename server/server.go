@@ -3,11 +3,18 @@ package server
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/docker/docker/api/types/volume"
+
+	"github.com/danhale-git/craft/internal/files"
+
+	"github.com/docker/docker/api/types/mount"
 
 	"github.com/danhale-git/craft/internal/logger"
 	"github.com/docker/docker/api/types/container"
@@ -18,7 +25,8 @@ import (
 )
 
 const (
-	CraftLabel   = "danhale-git/craft"              // Label used to identify craft servers
+	CraftLabel   = "danhale-git/craft" // Label used to identify craft servers
+	volumeLabel  = "danhale-git_craft"
 	anyIP        = "0.0.0.0"                        // Refers to any/all IPv4 addresses
 	defaultPort  = 19132                            // Default port for player connections
 	protocol     = "UDP"                            // MC uses UDP
@@ -46,7 +54,9 @@ type Server struct {
 // It is the equivalent of the following docker command:
 //
 //    docker run -d -e EULA=TRUE -p <HOST_PORT>:19132/udp <imageName>
-func New(hostPort int, name string) (*Server, error) {
+//
+// If mountVolume is true, a local volume will also be mounted and autoremove will be disabled.
+func New(hostPort int, name string, mountVolume bool) (*Server, error) {
 	if hostPort == 0 {
 		hostPort = nextAvailablePort()
 	}
@@ -71,6 +81,23 @@ func New(hostPort int, name string) (*Server, error) {
 
 	portBinding := nat.PortMap{containerPort: []nat.PortBinding{hostBinding}}
 
+	var mounts []mount.Mount
+	if mountVolume {
+		volName := fmt.Sprintf("%s-%s", volumeLabel, name)
+		vol, err := c.VolumeCreate(ctx, volume.VolumeCreateBody{
+			Name: volName,
+		})
+		if err != nil {
+			return nil, fmt.Errorf("creating vol '%s': %w", volName, err)
+		}
+
+		mounts = []mount.Mount{{
+			Type:   mount.TypeVolume,
+			Source: vol.Name,
+			Target: files.Directory,
+		}}
+	}
+
 	// docker run -d -e EULA=TRUE
 	createResp, err := c.ContainerCreate(
 		ctx,
@@ -85,7 +112,8 @@ func New(hostPort int, name string) (*Server, error) {
 		},
 		&container.HostConfig{
 			PortBindings: portBinding,
-			AutoRemove:   true,
+			AutoRemove:   !mountVolume,
+			Mounts:       mounts,
 		},
 		nil, nil, name,
 	)
@@ -107,8 +135,9 @@ func New(hostPort int, name string) (*Server, error) {
 	return &s, nil
 }
 
-// Get returns a Server struct representing a server which was already running. If the given name doesn't exist an error
-// of type NotFoundError is returned.
+// Get searches for a server with the given name (stopped or running) and checks that it has a label identifying it as
+// a craft server. If no craft server with that name exists, an error of type NotFoundError. If the server is found but
+// is not a craft server, an error of type NotCraftError is returned.
 func Get(cl client.ContainerAPIClient, containerName string) (*Server, error) {
 	id, err := containerID(containerName, cl)
 	if err != nil {
@@ -135,34 +164,6 @@ func Get(cl client.ContainerAPIClient, containerName string) (*Server, error) {
 	return &c, nil
 }
 
-// RunBedrock runs the bedrock server process and waits for confirmation from the server that the process has started.
-// The server should be join-able when this function returns.
-func (s *Server) RunBedrock() error {
-	// New the bedrock_server process
-	if err := s.Command(strings.Split(RunMCCommand, " ")); err != nil {
-		s.StopOrPanic()
-		return err
-	}
-
-	logs, err := s.LogReader(-1) // Negative number results in all logs
-	if err != nil {
-		s.StopOrPanic()
-		return err
-	}
-
-	scanner := bufio.NewScanner(logs)
-	scanner.Split(bufio.ScanLines)
-
-	for scanner.Scan() {
-		if scanner.Text() == "[INFO] Server started." {
-			// Server has finished starting
-			return nil
-		}
-	}
-
-	return fmt.Errorf("reached end of log reader without finding the 'Server started' message")
-}
-
 // Stop executes a stop command first in the server process cli then on the container itself, stopping the
 // server. The server must be saved separately to persist the world and settings.
 func (s *Server) Stop() error {
@@ -185,6 +186,52 @@ func (s *Server) Stop() error {
 	}
 
 	return nil
+}
+
+func (s *Server) IsRunning() bool {
+	inspect, err := s.ContainerInspect(context.Background(), s.ContainerID)
+	if err != nil {
+		logger.Error.Panic(err)
+	}
+
+	return inspect.State.Running
+}
+
+func (s *Server) HasVolume() bool {
+	inspect, err := s.ContainerInspect(context.Background(), s.ContainerID)
+	if err != nil {
+		logger.Error.Panic(err)
+	}
+
+	return len(inspect.Mounts) > 0
+}
+
+// RunBedrock runs the bedrock server process and waits for confirmation from the server that the process has started.
+// The server should be join-able when this function returns.
+func (s *Server) RunBedrock() error {
+	// New the bedrock_server process
+	if err := s.Command(strings.Split(RunMCCommand, " ")); err != nil {
+		s.StopOrPanic()
+		return err
+	}
+
+	logs, err := s.LogReader(1)
+	if err != nil {
+		s.StopOrPanic()
+		return err
+	}
+
+	scanner := bufio.NewScanner(logs)
+	scanner.Split(bufio.ScanLines)
+
+	for scanner.Scan() {
+		if scanner.Text() == "[INFO] Server started." {
+			// Server has finished starting
+			return nil
+		}
+	}
+
+	return fmt.Errorf("reached end of log reader without finding the 'Server started' message")
 }
 
 // StopOrPanic stops the server's container. The server process may not be stopped gracefully, call Server.Stop() to
@@ -295,7 +342,7 @@ func (s *Server) Port() (int, error) {
 func All(c client.ContainerAPIClient) ([]*Server, error) {
 	containers, err := c.ContainerList(
 		context.Background(),
-		docker.ContainerListOptions{},
+		docker.ContainerListOptions{All: true},
 	)
 	if err != nil {
 		return nil, fmt.Errorf("listing docker containers: %s", err)
@@ -311,7 +358,7 @@ func All(c client.ContainerAPIClient) ([]*Server, error) {
 	for _, n := range names {
 		s, err := Get(c, n)
 		if err != nil {
-			if _, ok := err.(*NotCraftError); ok {
+			if errors.Is(err, &NotCraftError{}) || !s.IsRunning() {
 				continue
 			}
 
@@ -325,7 +372,7 @@ func All(c client.ContainerAPIClient) ([]*Server, error) {
 }
 
 func containerID(name string, client client.ContainerAPIClient) (string, error) {
-	containers, err := client.ContainerList(context.Background(), docker.ContainerListOptions{})
+	containers, err := client.ContainerList(context.Background(), docker.ContainerListOptions{All: true})
 	if err != nil {
 		return "", fmt.Errorf("listing all containers: %s", err)
 	}
@@ -384,6 +431,12 @@ func (e *NotFoundError) Error() string {
 	return fmt.Sprintf("container with name '%s' not found.", e.Name)
 }
 
+// Is implements Is(error) to support errors.Is
+func (e *NotFoundError) Is(tgt error) bool {
+	_, ok := tgt.(*NotFoundError)
+	return ok
+}
+
 // NotCraftError reports the instance where a container is found with a given name but lacks the label
 // indicating that it is managed using craft.
 type NotCraftError struct {
@@ -392,4 +445,10 @@ type NotCraftError struct {
 
 func (e *NotCraftError) Error() string {
 	return fmt.Sprintf("container found with name '%s' but it does not appear to be a craft server.", e.Name)
+}
+
+// Is implements Is(error) to support errors.Is
+func (e *NotCraftError) Is(tgt error) bool {
+	_, ok := tgt.(*NotCraftError)
+	return ok
 }

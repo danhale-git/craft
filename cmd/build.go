@@ -1,7 +1,9 @@
 package cmd
 
 import (
+	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -32,6 +34,11 @@ func NewBuildCommand() *cobra.Command {
 				logger.Error.Panic(err)
 			}
 
+			noCache, err := cmd.Flags().GetBool("no-cache")
+			if err != nil {
+				logger.Error.Panic(err)
+			}
+
 			if urlString == "" {
 				logger.Error.Fatalf("Error: value of 'url' flag is an empty string. %s", webHelp)
 			}
@@ -41,27 +48,50 @@ func NewBuildCommand() *cobra.Command {
 				logger.Error.Fatalf("error parsing url: %s", err)
 			}
 
-			if err := server.BuildDockerImage(u.String()); err != nil {
+			if err := server.BuildDockerImage(u.String(), noCache); err != nil {
 				logger.Error.Fatalf("Error building image: %s", err)
 			}
 		},
 	}
 
-	downloadURL := make([]byte, 0)
+	downloadURL, err := getServerDownloadURL()
 
-	// Try to get the download URL. If something goes wrong the user will be asked to get it.
-	res, err := http.Get(webURL)
-	if err == nil {
-		data, err := io.ReadAll(res.Body)
-		if err != nil {
-			logger.Error.Fatalln(err)
-		}
-
-		downloadURLRegexp := regexp.MustCompile(downloadURLRegexp)
-		downloadURL = downloadURLRegexp.Find(data)
+	if err != nil {
+		log.Printf("unable to query %s for latest version to auto populate --url flag: %s\n",
+			webURL, err)
 	}
 
 	command.Flags().String("url", string(downloadURL), webHelp)
+	command.Flags().Bool("no-cache", false,
+		"If this flag is passed the server image will be built from scratch without using cached layers.")
 
 	return command
+}
+
+func getServerDownloadURL() ([]byte, error) {
+	request, err := http.NewRequest("GET", webURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("creating http request: %w", err)
+	}
+
+	request.Header.Set("User-Agent", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_13_1) AppleWebKit/537.36 (K HTML, like Gecko) Chrome/61.0.3163.100 Safari/537.36")
+
+	c := &http.Client{}
+
+	res, err := c.Do(request)
+	if err != nil {
+		return nil, fmt.Errorf("sending http request: %w", err)
+	}
+
+	if res.StatusCode < 200 || res.StatusCode > 299 {
+		return nil, fmt.Errorf("recieved status %s", res.Status)
+	}
+
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response body: %s", err)
+	}
+
+	downloadURLRegexp := regexp.MustCompile(downloadURLRegexp)
+	return downloadURLRegexp.Find(data), nil
 }

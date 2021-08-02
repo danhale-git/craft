@@ -23,9 +23,11 @@ func NewStopCmd() *cobra.Command {
 
 				c := craft.GetServerOrExit(name)
 
-				if _, err := craft.CopyBackup(c); err != nil {
-					logger.Error.Printf("%s: error while taking backup: %s", c.ContainerName, err)
-					continue
+				if !c.HasVolume() {
+					if _, err := craft.CopyBackup(c); err != nil {
+						logger.Error.Printf("%s: error while taking backup: %s", c.ContainerName, err)
+						continue
+					}
 				}
 
 				if err := c.Stop(); err != nil {

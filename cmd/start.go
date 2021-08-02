@@ -48,7 +48,9 @@ If multiple arguments are provided, the --port flag is ignored and ports are ass
 				started = append(started, name)
 			}
 
-			logger.Info.Println("started:", strings.Join(started, " "))
+			if len(started) > 0 {
+				logger.Info.Println("started:", strings.Join(started, " "))
+			}
 		},
 	}
 
