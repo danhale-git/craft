@@ -329,9 +329,9 @@ func PrintServers(all bool) error {
 			return err
 		}
 
-		layout := "2006-01-02T15:04:05.0000000Z"
+		layout := "2006-01-02T15:04:05"
 
-		t, err := time.Parse(layout, inspect.State.FinishedAt)
+		t, err := time.Parse(layout, strings.Split(inspect.State.FinishedAt, ".")[0])
 		if err != nil {
 			return fmt.Errorf("failed to pass stopped time for server '%s': %w", s.ContainerName, err)
 		}
